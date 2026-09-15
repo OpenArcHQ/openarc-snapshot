@@ -1974,6 +1974,12 @@ async function durabilityCounts(): Promise<Record<string, number>> {
   return result.rows[0] as Record<string, number>;
 }
 
+// These two cases seed 4,096-4,097 synthetic rows across actions, reservations and
+// budget events, each firing its row triggers, on top of the per-test migration.
+// They carry an explicit bulk-test timeout like the grant and adversarial suites;
+// under vitest's 5 s default they timed out on the slower public CI runner, and
+// the timed-out transaction then deadlocked the next test's schema reset. No
+// assertion depends on the timeout.
 describe('bounded completeness: 4096 accepted, 4097 fails closed', () => {
   it('bounds the COMMITTED exposure source and writes nothing after overflow', async () => {
     const chain = await seedChain(203, { rollingLimit: '99999999999999' });
@@ -2033,7 +2039,7 @@ describe('bounded completeness: 4096 accepted, 4097 fails closed', () => {
       [actionId(2032)],
     );
     expect(attempted.rows[0]?.n).toBe(0);
-  });
+  }, 60000);
 
   it('bounds the UNRESOLVED exposure source and writes nothing after overflow', async () => {
     const chain = await seedChain(204, { rollingLimit: '99999999999999' });
@@ -2090,7 +2096,7 @@ describe('bounded completeness: 4096 accepted, 4097 fails closed', () => {
       [actionId(2042)],
     );
     expect(attempted.rows[0]?.n).toBe(0);
-  });
+  }, 60000);
 });
 
 /** The already-seeded owner identity for a known seed (no new rows). */
