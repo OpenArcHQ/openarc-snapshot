@@ -25,6 +25,18 @@ export const VAULT_RECORD_CAPS = Object.freeze({
   workspace_settings: 1,
   sentinel: 1,
 } as const);
+// P08-01: caps of the ROOT build's kinds, equal to its apps/web/src/vault/types.ts:24-26. Kept in a separate additive
+// constant because VAULT_RECORD_CAPS is frozen byte-for-byte by the P08-00 identifier test (item 6).
+export const ROOT_VAULT_RECORD_CAPS = Object.freeze({
+  task_draft: 100,
+  task_report: 100,
+  research_run: 100,
+} as const);
+/** Every stored kind with its cap; the type fails to compile if a union member has no cap. */
+export const VAULT_RECORD_CAPS_BY_KIND: Readonly<Record<WorkspaceRecord["kind"], number>> = Object.freeze({
+  ...VAULT_RECORD_CAPS,
+  ...ROOT_VAULT_RECORD_CAPS,
+});
 // Combined capacity is independent of per-kind ceilings; keep the M02 manifest bound.
 export const VAULT_MAX_RECORDS = 6_602;
 export const VAULT_MAX_BACKUP_BYTES = 32 * 1024 * 1024;

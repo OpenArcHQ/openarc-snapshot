@@ -60,6 +60,7 @@ const EnvironmentSchema = z.object({
   COMMERCE_SESSIONS_ENABLED: flag(),
   COMMERCE_ACTIONS_ENABLED: flag(),
   COMMERCE_GRANTS_ENABLED: flag(),
+  COMMERCE_PAYMENTS_ENABLED: flag(),
   MACHINE_CREDENTIAL_PEPPER_VERSION: pepperVersion().optional(),
   MACHINE_CREDENTIAL_PEPPER: canonical32ByteSecret().optional(),
   MACHINE_CREDENTIAL_PREVIOUS_VERSION: pepperVersion().optional(),
@@ -334,6 +335,35 @@ const EnvironmentSchema = z.object({
       context.addIssue({ code: "custom", path: ["TENANT_DATABASE_URL"], message: "Commerce grants require a dedicated restricted role connection" });
     }
   }
+  // Payment attempts (migration 0015) are an INDEPENDENT protected family and
+  // ship DEFAULT OFF. Enabling them requires authentication, the commerce
+  // session, commerce action AND authorization grant families (an attempt is
+  // persisted only against an issued grant of a reserved action) and the
+  // dedicated restricted TENANT_DATABASE_URL, distinct from AUTH_DATABASE_URL.
+  // An enabled payment surface persists and records attempts only: it never
+  // signs, sends or settles anything.
+  if (config.COMMERCE_PAYMENTS_ENABLED) {
+    if (!config.AUTH_ENABLED) {
+      context.addIssue({ code: "custom", path: ["COMMERCE_PAYMENTS_ENABLED"], message: "Commerce payments require authentication" });
+    }
+    if (!config.COMMERCE_SESSIONS_ENABLED) {
+      context.addIssue({ code: "custom", path: ["COMMERCE_PAYMENTS_ENABLED"], message: "Commerce payments require the commerce session family" });
+    }
+    if (!config.COMMERCE_ACTIONS_ENABLED) {
+      context.addIssue({ code: "custom", path: ["COMMERCE_PAYMENTS_ENABLED"], message: "Commerce payments require the commerce action family" });
+    }
+    if (!config.COMMERCE_GRANTS_ENABLED) {
+      context.addIssue({ code: "custom", path: ["COMMERCE_PAYMENTS_ENABLED"], message: "Commerce payments require the commerce grant family" });
+    }
+    if (!config.TENANT_DATABASE_URL) {
+      context.addIssue({ code: "custom", path: ["COMMERCE_PAYMENTS_ENABLED"], message: "Commerce payments require a dedicated restricted database URL" });
+    } else if (
+      config.AUTH_DATABASE_URL !== undefined &&
+      config.TENANT_DATABASE_URL === config.AUTH_DATABASE_URL
+    ) {
+      context.addIssue({ code: "custom", path: ["TENANT_DATABASE_URL"], message: "Commerce payments require a dedicated restricted role connection" });
+    }
+  }
   if (config.GATEWAY_EVIDENCE_ENABLED) {
     if (!config.AGENT_JOBS_ENABLED) {
       context.addIssue({ code: "custom", path: ["GATEWAY_EVIDENCE_ENABLED"], message: "Gateway evidence requires the cumulative job evidence milestone" });
@@ -354,8 +384,8 @@ const EnvironmentSchema = z.object({
     if (!config.ARC_OBSERVATION_ENABLED) {
       context.addIssue({ code: "custom", path: ["AGENT_REGISTRY_ENABLED"], message: "Agent registry evidence requires Arc observation" });
     }
-    if (config.SOURCE_MAX_SUBCALLS < 10) {
-      context.addIssue({ code: "custom", path: ["SOURCE_MAX_SUBCALLS"], message: "Agent registry evidence requires ten bounded source subcalls" });
+    if (config.SOURCE_MAX_SUBCALLS < 16) {
+      context.addIssue({ code: "custom", path: ["SOURCE_MAX_SUBCALLS"], message: "Agent registry evidence requires sixteen bounded source subcalls" });
     }
   }
   if (config.AGENT_JOBS_ENABLED) {

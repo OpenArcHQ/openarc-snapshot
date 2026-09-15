@@ -5,8 +5,11 @@ import type { BuildInfo } from "@openarc/shared";
 
 import { FixtureExplorer } from "./evidence/FixtureExplorer.js";
 import { investigationsEnabled, genericAgentImportEnabled, gatewayEvidenceEnabled, agentJobsEnabled, agentRegistryEnabled, apiBoundaryEnabled, arcObservationEnabled, encryptedWorkspaceEnabled } from "./app/availability.js";
-import { VaultWorkspace } from "./vault/VaultWorkspace.js";
 
+// The encrypted workspace (Vault UI, IndexedDB and crypto) is split out of the
+// main entry so public routes never download it. Session-end locking reaches
+// Vault storage separately through the dynamic session bridge.
+const VaultWorkspace = lazy(() => import("./vault/VaultWorkspace.js").then((module) => ({ default: module.VaultWorkspace })));
 const SuppliedDesignApp = lazy(() => import("./supplied/DesignApp.js"));
 const AccountPage = lazy(() => import("./account/AccountPage.js"));
 const TenantApp = lazy(() => import("./tenant/TenantApp.js"));
@@ -151,7 +154,19 @@ export function App({ build }: AppProps) {
     );
   }
 
-  if (path === "/workspace" && workspaceEnabled) return <VaultWorkspace build={build} />;
+  if (path === "/workspace" && workspaceEnabled) {
+    return (
+      <Suspense
+        fallback={
+          <main className="supplied-fallback" role="status">
+            Loading the encrypted workspace…
+          </main>
+        }
+      >
+        <VaultWorkspace build={build} />
+      </Suspense>
+    );
+  }
 
   const skipToExplorer = () => {
     requestAnimationFrame(() => document.querySelector<HTMLElement>("#fixture-explorer")?.focus());

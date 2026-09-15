@@ -219,6 +219,8 @@ describe('tenant migration and schema2 boundary', () => {
       '0012_authorization_grants',
       '0013_commerce_session_reads',
       '0014_grant_mutation_reads',
+      '0015_payment_attempts',
+      '0016_evidence_store',
     ]);
     expect(applied.rows[1]?.checksum).toBe(checksum);
   });
@@ -250,6 +252,7 @@ describe('tenant migration and schema2 boundary', () => {
       'budget_policy_roots',
       'budget_policy_versions',
       'listing_origin_reviews',
+      'listing_version_payment_terms',
       'listing_version_states',
       'listing_versions',
       'listings',

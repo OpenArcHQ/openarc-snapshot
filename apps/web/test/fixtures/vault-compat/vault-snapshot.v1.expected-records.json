@@ -1,0 +1,1206 @@
+[
+  {
+    "recordSchema": "openarc.permission-receipt.v1",
+    "kind": "permission_receipt",
+    "recordId": "7e570000-0000-4000-8000-000000000101",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-10T10:00:00Z",
+    "updatedAt": "2026-09-10T10:00:01Z",
+    "connectorId": "openarc_capabilities",
+    "destination": {
+      "origin": "https://app.example.test",
+      "path": "/v1/private/capabilities",
+      "method": "GET",
+      "upstreams": []
+    },
+    "releasedFields": [],
+    "purpose": "Inspect enabled OpenArc connections and limits.",
+    "credentials": "omit",
+    "openArcRetention": "No private workspace fields or response bodies are retained by the OpenArc API.",
+    "providerRetention": "No upstream provider is contacted by this check.",
+    "hostingMetadata": "OpenArc and its hosting provider receive ordinary network metadata, including IP and user-agent.",
+    "approvedAt": "2026-09-10T10:00:00Z",
+    "outcome": "completed",
+    "resolvedAt": "2026-09-10T10:00:01Z",
+    "failureCode": null
+  },
+  {
+    "recordSchema": "openarc.permission-receipt.v1",
+    "kind": "permission_receipt",
+    "recordId": "7e570000-0000-4000-8000-000000000102",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-10T10:00:00Z",
+    "updatedAt": "2026-09-10T10:00:02Z",
+    "connectorId": "openarc_capabilities",
+    "destination": {
+      "origin": "https://app.example.test",
+      "path": "/v1/private/capabilities",
+      "method": "GET",
+      "upstreams": []
+    },
+    "releasedFields": [],
+    "purpose": "Inspect enabled OpenArc connections and limits.",
+    "credentials": "omit",
+    "openArcRetention": "No private workspace fields or response bodies are retained by the OpenArc API.",
+    "providerRetention": "No upstream provider is contacted by this check.",
+    "hostingMetadata": "OpenArc and its hosting provider receive ordinary network metadata, including IP and user-agent.",
+    "approvedAt": "2026-09-10T10:00:00Z",
+    "outcome": "failed",
+    "resolvedAt": "2026-09-10T10:00:02Z",
+    "failureCode": "REQUEST_UNAVAILABLE"
+  },
+  {
+    "recordSchema": "openarc.permission-receipt.v2",
+    "kind": "permission_receipt",
+    "recordId": "7e570000-0000-4000-8000-000000000201",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-10T12:00:00Z",
+    "updatedAt": "2026-09-10T12:00:00Z",
+    "credentials": "omit",
+    "openArcRetention": "No request or response body is retained by the OpenArc API. The approved result is stored only in the encrypted local workspace.",
+    "providerRetention": "Arc's public RPC receives the released public identifier under Arc's current terms and privacy policy.",
+    "hostingMetadata": "OpenArc, its hosting provider, and the Arc RPC receive ordinary network metadata, including IP and user-agent where applicable.",
+    "approvedAt": "2026-09-10T12:00:00Z",
+    "outcome": "completed",
+    "resolvedAt": "2026-09-10T12:00:00Z",
+    "failureCode": null,
+    "connectorId": "arc_account_snapshot",
+    "destination": {
+      "origin": "https://app.example.test",
+      "path": "/v1/private/arc/account-snapshot",
+      "method": "POST",
+      "upstreams": [
+        "https://rpc.testnet.arc.io"
+      ]
+    },
+    "releasedFields": [
+      "network",
+      "address"
+    ],
+    "released": {
+      "network": "eip155:5042002",
+      "address": "0x1111111111111111111111111111111111111111"
+    },
+    "purpose": "Observe one public Arc Testnet address at one exact final block."
+  },
+  {
+    "recordSchema": "openarc.permission-receipt.v2",
+    "kind": "permission_receipt",
+    "recordId": "7e570000-0000-4000-8000-000000000202",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-10T12:00:00Z",
+    "updatedAt": "2026-09-10T12:00:00Z",
+    "credentials": "omit",
+    "openArcRetention": "No request or response body is retained by the OpenArc API. The approved result is stored only in the encrypted local workspace.",
+    "providerRetention": "Arc's public RPC receives the released public identifier under Arc's current terms and privacy policy.",
+    "hostingMetadata": "OpenArc, its hosting provider, and the Arc RPC receive ordinary network metadata, including IP and user-agent where applicable.",
+    "approvedAt": "2026-09-10T12:00:00Z",
+    "outcome": "completed",
+    "resolvedAt": "2026-09-10T12:00:00Z",
+    "failureCode": null,
+    "connectorId": "arc_transaction_evidence",
+    "destination": {
+      "origin": "https://app.example.test",
+      "path": "/v1/private/arc/transaction-evidence",
+      "method": "POST",
+      "upstreams": [
+        "https://rpc.testnet.arc.io"
+      ]
+    },
+    "releasedFields": [
+      "network",
+      "transactionHash"
+    ],
+    "released": {
+      "network": "eip155:5042002",
+      "transactionHash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "purpose": "Observe one public Arc Testnet transaction, receipt, anchor, fee, and USDC movement set."
+  },
+  {
+    "recordSchema": "openarc.permission-receipt.v2",
+    "kind": "permission_receipt",
+    "recordId": "7e570000-0000-4000-8000-000000000203",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-10T12:00:00Z",
+    "updatedAt": "2026-09-10T12:00:00Z",
+    "credentials": "omit",
+    "openArcRetention": "No request or response body is retained by the OpenArc API. The approved result is stored only in the encrypted local workspace.",
+    "providerRetention": "Arc's public RPC receives the released public identifier under Arc's current terms and privacy policy.",
+    "hostingMetadata": "OpenArc, its hosting provider, and the Arc RPC receive ordinary network metadata, including IP and user-agent where applicable.",
+    "approvedAt": "2026-09-10T12:00:00Z",
+    "outcome": "approved",
+    "resolvedAt": null,
+    "failureCode": null,
+    "connectorId": "arc_account_snapshot",
+    "destination": {
+      "origin": "https://app.example.test",
+      "path": "/v1/private/arc/account-snapshot",
+      "method": "POST",
+      "upstreams": [
+        "https://rpc.testnet.arc.io"
+      ]
+    },
+    "releasedFields": [
+      "network",
+      "address"
+    ],
+    "released": {
+      "network": "eip155:5042002",
+      "address": "0x4444444444444444444444444444444444444444"
+    },
+    "purpose": "Observe one public Arc Testnet address at one exact final block."
+  },
+  {
+    "recordSchema": "openarc.arc-observation-record.v1",
+    "recordId": "7e570000-0000-4000-8000-000000000211",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-10T12:00:00Z",
+    "updatedAt": "2026-09-10T12:00:00Z",
+    "kind": "arc_observation",
+    "permissionReceiptId": "7e570000-0000-4000-8000-000000000201",
+    "observation": {
+      "schemaVersion": "openarc.arc-account-snapshot.v1",
+      "network": "eip155:5042002",
+      "address": "0x1111111111111111111111111111111111111111",
+      "anchor": {
+        "blockNumber": "100",
+        "blockHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "blockTimestamp": "2026-09-10T11:59:59Z",
+        "finality": "deterministic",
+        "confirmations": "1"
+      },
+      "nativeUsdc": {
+        "asset": "USDC",
+        "interface": "native",
+        "amount": {
+          "baseUnits": "1000000000000000000",
+          "decimals": 18,
+          "decimal": "1"
+        }
+      },
+      "erc20UsdcView": {
+        "asset": "USDC",
+        "interface": "erc20",
+        "contract": "0x3600000000000000000000000000000000000000",
+        "amount": {
+          "baseUnits": "1000000",
+          "decimals": 6,
+          "decimal": "1"
+        },
+        "relationship": "same_underlying_balance",
+        "truncatesSubMicroUsdc": true
+      },
+      "source": {
+        "sourceId": "arc_primary_rpc",
+        "origin": "https://rpc.testnet.arc.io",
+        "explorerOrigin": "https://testnet.arcscan.app",
+        "network": "eip155:5042002",
+        "sourceRevision": "arc-docs-2026-09-03",
+        "observedAt": "2026-09-10T12:00:00Z",
+        "adapterVersion": "openarc.arc-observation.m04.v1"
+      },
+      "limitations": [
+        "This is a read-only observation at one exact Arc Testnet block.",
+        "The 6-decimal ERC-20 view truncates native precision below one micro-USDC.",
+        "A public address is not proof that its owner or controller is an agent."
+      ]
+    }
+  },
+  {
+    "recordSchema": "openarc.arc-observation-record.v1",
+    "recordId": "7e570000-0000-4000-8000-000000000212",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-10T12:00:00Z",
+    "updatedAt": "2026-09-10T12:00:00Z",
+    "kind": "arc_observation",
+    "permissionReceiptId": "7e570000-0000-4000-8000-000000000202",
+    "observation": {
+      "schemaVersion": "openarc.arc-transaction-evidence.v1",
+      "network": "eip155:5042002",
+      "transaction": {
+        "hash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "blockNumber": "100",
+        "blockHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "transactionIndex": "0",
+        "from": "0x1111111111111111111111111111111111111111",
+        "to": "0x2222222222222222222222222222222222222222",
+        "nativeValue": {
+          "baseUnits": "0",
+          "decimals": 18,
+          "decimal": "0"
+        }
+      },
+      "receipt": {
+        "status": "success",
+        "gasUsed": "1",
+        "effectiveGasPrice": {
+          "baseUnits": "0",
+          "decimals": 18,
+          "decimal": "0"
+        },
+        "fee": {
+          "baseUnits": "0",
+          "decimals": 18,
+          "decimal": "0"
+        }
+      },
+      "anchor": {
+        "blockNumber": "100",
+        "blockHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "blockTimestamp": "2026-09-10T11:59:59Z",
+        "finality": "deterministic",
+        "confirmations": "1"
+      },
+      "movements": [],
+      "coverage": {
+        "totalLogs": 0,
+        "canonicalMovements": 0,
+        "corroboratedMovements": 0,
+        "unsupportedLogs": 0,
+        "completeForUsdcTransfers": true
+      },
+      "source": {
+        "sourceId": "arc_primary_rpc",
+        "origin": "https://rpc.testnet.arc.io",
+        "explorerOrigin": "https://testnet.arcscan.app",
+        "network": "eip155:5042002",
+        "sourceRevision": "arc-docs-2026-09-03",
+        "observedAt": "2026-09-10T12:00:00Z",
+        "adapterVersion": "openarc.arc-observation.m04.v1"
+      },
+      "limitations": [
+        "This is a read-only observation of one Arc Testnet transaction and receipt.",
+        "EIP-7708 system events are canonical; matching ERC-20 events are corroboration, not additional movements.",
+        "Transaction inclusion does not prove intent, authorization, fulfillment, or service quality."
+      ]
+    }
+  },
+  {
+    "recordSchema": "openarc.permission-receipt.v3",
+    "kind": "permission_receipt",
+    "recordId": "7e570000-0000-4000-8000-000000000301",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-11T12:00:00Z",
+    "updatedAt": "2026-09-11T12:00:00Z",
+    "connectorId": "arc_agent_registry_evidence",
+    "destination": {
+      "origin": "https://app.example.test",
+      "path": "/v1/private/arc/agent-registry-evidence",
+      "method": "POST",
+      "upstreams": [
+        "https://rpc.testnet.arc.io"
+      ]
+    },
+    "releasedFields": [
+      "network",
+      "agentId"
+    ],
+    "released": {
+      "network": "eip155:5042002",
+      "agentId": "1"
+    },
+    "purpose": "Observe one ERC-8004 agent identity and optional exact observer or validator claims at one final Arc Testnet block.",
+    "credentials": "omit",
+    "openArcRetention": "No request or response body is retained by the OpenArc API. The approved result is stored only in the encrypted local workspace.",
+    "providerRetention": "Arc's public RPC receives the released public registry identifiers under Arc's current terms and privacy policy.",
+    "hostingMetadata": "OpenArc, its hosting provider, and the Arc RPC receive ordinary network metadata, including IP and user-agent where applicable.",
+    "approvedAt": "2026-09-11T12:00:00Z",
+    "outcome": "completed",
+    "resolvedAt": "2026-09-11T12:00:00Z",
+    "failureCode": null
+  },
+  {
+    "recordSchema": "openarc.agent-registry-observation-record.v1",
+    "recordId": "7e570000-0000-4000-8000-000000000311",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-11T12:00:00Z",
+    "updatedAt": "2026-09-11T12:00:00Z",
+    "kind": "agent_registry_observation",
+    "permissionReceiptId": "7e570000-0000-4000-8000-000000000301",
+    "linkedAgentProfileRecordId": "7e57a000-0000-4000-8000-000000000005",
+    "observation": {
+      "schemaVersion": "openarc.agent-registry-evidence.v1",
+      "network": "eip155:5042002",
+      "agentId": "1",
+      "anchor": {
+        "blockNumber": "100",
+        "blockHash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "blockTimestamp": "2026-09-11T12:00:00Z",
+        "finality": "deterministic",
+        "confirmations": "1"
+      },
+      "identity": {
+        "owner": "0x1111111111111111111111111111111111111111",
+        "agentWallet": "0x2222222222222222222222222222222222222222",
+        "metadata": {
+          "uri": "",
+          "kind": "none",
+          "trust": "untrusted_external_metadata",
+          "fetched": false
+        }
+      },
+      "feedback": null,
+      "validation": null,
+      "source": {
+        "sourceId": "arc_primary_rpc",
+        "registrySourceId": "erc8004_registries",
+        "origin": "https://rpc.testnet.arc.io",
+        "explorerOrigin": "https://testnet.arcscan.app",
+        "network": "eip155:5042002",
+        "sourceRevision": "arc-erc8004-docs-2026-09-04",
+        "reviewedAt": "2026-09-04",
+        "specificationStatus": "draft",
+        "contractsRevision": "b9e466c250744a7e06b13dff9d3c2844ed64f825",
+        "registries": {
+          "identity": "0x8004a818bfb912233c491871b3d84c89a494bd9e",
+          "reputation": "0x8004b663056a597dffe9eccc1965a193b7388713",
+          "validation": "0x8004cb1bf31daf7788923b405b754f57aceb4272"
+        },
+        "observedAt": "2026-09-11T12:00:00Z",
+        "adapterVersion": "openarc.agent-registry-evidence.m05.v1"
+      },
+      "limitations": [
+        "ERC-8004 is a draft standard; registry facts may change before finalization.",
+        "Identity ownership and metadata are registry claims, not proof of safety, quality, or control.",
+        "Feedback is one observer's claim and validation is one validator's response; neither is a universal score.",
+        "Metadata is untrusted external text and was not fetched or rendered by OpenArc."
+      ]
+    }
+  },
+  {
+    "recordSchema": "openarc.permission-receipt.v4",
+    "kind": "permission_receipt",
+    "recordId": "7e570000-0000-4000-8000-000000000401",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-12T12:00:00Z",
+    "updatedAt": "2026-09-12T12:00:00Z",
+    "connectorId": "arc_job_evidence",
+    "destination": {
+      "origin": "https://app.example.test",
+      "path": "/v1/private/arc/job-evidence",
+      "method": "POST",
+      "upstreams": [
+        "https://rpc.testnet.arc.io"
+      ]
+    },
+    "releasedFields": [
+      "network",
+      "jobId"
+    ],
+    "released": {
+      "network": "eip155:5042002",
+      "jobId": "1"
+    },
+    "purpose": "Observe one job on the reviewed Arc Testnet reference contract and an optional exact submission receipt.",
+    "credentials": "omit",
+    "openArcRetention": "No request or response body is retained by the OpenArc API. The approved result is stored only in the encrypted local workspace.",
+    "providerRetention": "Arc's public RPC receives the job ID and optional submission transaction hash under Arc's current terms and privacy policy.",
+    "hostingMetadata": "OpenArc, its hosting provider, and the Arc RPC receive ordinary network metadata, including IP and user-agent where applicable.",
+    "approvedAt": "2026-09-12T12:00:00Z",
+    "outcome": "completed",
+    "resolvedAt": "2026-09-12T12:00:00Z",
+    "failureCode": null
+  },
+  {
+    "recordSchema": "openarc.job-observation-record.v1",
+    "recordId": "7e570000-0000-4000-8000-000000000411",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-12T12:00:00Z",
+    "updatedAt": "2026-09-12T12:00:00Z",
+    "kind": "job_observation",
+    "permissionReceiptId": "7e570000-0000-4000-8000-000000000401",
+    "linkedActionRecordId": "7e57a000-0000-4000-8000-000000000006",
+    "linkBasis": "explicit_local_confirmation",
+    "observation": {
+      "schemaVersion": "openarc.job-evidence.v1",
+      "network": "eip155:5042002",
+      "jobId": "1",
+      "anchor": {
+        "blockNumber": "100",
+        "blockHash": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "blockTimestamp": "2026-09-04T12:00:00Z",
+        "finality": "deterministic",
+        "confirmations": "1"
+      },
+      "client": "0x1111111111111111111111111111111111111111",
+      "provider": "0x2222222222222222222222222222222222222222",
+      "evaluator": "0x3333333333333333333333333333333333333333",
+      "hook": "0x0000000000000000000000000000000000000000",
+      "description": "<script>PUBLIC_UNTRUSTED_JOB_DESCRIPTION</script>",
+      "budget": {
+        "asset": "USDC",
+        "contract": "0x3600000000000000000000000000000000000000",
+        "baseUnits": "1234567890123456789012345",
+        "decimals": 6,
+        "decimal": "1234567890123456789.012345",
+        "explicitlySet": true
+      },
+      "expiry": {
+        "unixSeconds": "1788523200",
+        "timestamp": "2026-09-04T12:00:00Z",
+        "deadlineReachedAtAnchor": true
+      },
+      "status": "Submitted",
+      "deliverable": {
+        "availability": "not_observed",
+        "reason": "not_returned_by_getJob"
+      },
+      "source": {
+        "sourceId": "arc_primary_rpc",
+        "jobSourceId": "erc8183_reference",
+        "origin": "https://rpc.testnet.arc.io",
+        "explorerOrigin": "https://testnet.arcscan.app",
+        "network": "eip155:5042002",
+        "contract": "0x0747eef0706327138c69792bf28cd525089e4583",
+        "implementation": "0xa316fd02827242d537f84730f8a37d0ba5fd351a",
+        "sourceRevision": "arc-erc8183-reference-2026-09-04",
+        "reviewedAt": "2026-09-04",
+        "sourceSha256": "a16ae3290855910a4c06a59fa691d1d2b56b534e744f15b6f73a6a06ccb1bec4",
+        "observedAt": "2026-09-04T12:00:01Z",
+        "adapterVersion": "openarc.job-evidence.m06.v1"
+      },
+      "limitations": [
+        "This observation covers one reviewed Arc Testnet reference contract, not all ERC-8183 jobs.",
+        "A contract status does not prove service quality, intent, authorization, payment amounts, or refund amounts.",
+        "Passing the deadline does not automatically change the recorded contract status to Expired.",
+        "The description is untrusted contract text; external content and hooks were not fetched or executed.",
+        "A deliverable digest requires an explicitly supplied submission receipt; it does not verify the deliverable's content or quality."
+      ]
+    }
+  },
+  {
+    "recordSchema": "openarc.x402-bundle-record.v1",
+    "recordId": "7e570000-0000-4000-8000-000000000501",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-05T12:03:00Z",
+    "updatedAt": "2026-09-05T12:03:00Z",
+    "kind": "x402_bundle",
+    "bundle": {
+      "schemaVersion": "openarc.x402-receipt-bundle.v1",
+      "bundleId": "7e570000-0000-4000-8000-0000000005b1",
+      "capturedAt": "2026-09-05T12:03:00Z",
+      "provenance": "imported_metadata",
+      "authentication": "not_verified",
+      "resource": {
+        "originDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "resourceDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "responseMetadata": {
+        "respondedAt": "2026-09-05T12:01:00Z",
+        "httpStatus": 200,
+        "reportedSuccess": true,
+        "responseDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "transferId": "33333333-3333-4333-8333-333333333333"
+      }
+    }
+  },
+  {
+    "recordSchema": "openarc.permission-receipt.v5",
+    "kind": "permission_receipt",
+    "recordId": "7e570000-0000-4000-8000-000000000502",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-13T12:00:00Z",
+    "updatedAt": "2026-09-13T12:00:00Z",
+    "credentials": "omit",
+    "openArcRetention": "No request or response body is retained by the OpenArc API. The approved result is stored only in the encrypted local workspace.",
+    "providerRetention": "Circle Gateway receives the exact transfer UUID under Circle's current terms and privacy policy. Provider retention is not controlled by OpenArc.",
+    "hostingMetadata": "OpenArc, its hosting provider, and Circle Gateway receive ordinary network metadata, including IP and user-agent where applicable.",
+    "approvedAt": "2026-09-13T12:00:00Z",
+    "outcome": "completed",
+    "resolvedAt": "2026-09-13T12:00:00Z",
+    "failureCode": null,
+    "connectorId": "circle_gateway_transfer",
+    "destination": {
+      "origin": "https://app.example.test",
+      "path": "/v1/private/gateway/transfer",
+      "method": "POST",
+      "upstreams": [
+        "https://gateway-api-testnet.circle.com"
+      ]
+    },
+    "releasedFields": [
+      "network",
+      "transferId"
+    ],
+    "released": {
+      "network": "eip155:5042002",
+      "transferId": "33333333-3333-4333-8333-333333333333"
+    },
+    "purpose": "Read one exact Circle Gateway Arc Testnet transfer; this does not verify fulfillment."
+  },
+  {
+    "recordSchema": "openarc.gateway-observation-record.v1",
+    "recordId": "7e570000-0000-4000-8000-000000000511",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-13T12:00:00Z",
+    "updatedAt": "2026-09-13T12:00:00Z",
+    "kind": "gateway_observation",
+    "permissionReceiptId": "7e570000-0000-4000-8000-000000000502",
+    "linkedBundleRecordId": "7e570000-0000-4000-8000-000000000501",
+    "linkBasis": "explicit_local_confirmation",
+    "observation": {
+      "schemaVersion": "openarc.gateway-transfer-observation.v1",
+      "network": "eip155:5042002",
+      "transfer": {
+        "id": "33333333-3333-4333-8333-333333333333",
+        "status": "completed",
+        "token": "USDC",
+        "sendingNetwork": "eip155:5042002",
+        "recipientNetwork": "eip155:5042002",
+        "fromAddress": "0x1111111111111111111111111111111111111111",
+        "toAddress": "0x2222222222222222222222222222222222222222",
+        "amount": "1000",
+        "nonce": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "txHash": null,
+        "createdAt": "2026-09-05T12:00:00Z",
+        "updatedAt": "2026-09-05T12:01:00Z"
+      },
+      "source": {
+        "sourceId": "circle_gateway_testnet",
+        "origin": "https://gateway-api-testnet.circle.com",
+        "observedAt": "2026-09-05T12:02:00Z",
+        "adapterVersion": "openarc.gateway-transfer.m07.v1"
+      }
+    }
+  },
+  {
+    "recordSchema": "openarc.agent-import-record.v1",
+    "recordId": "7e570000-0000-4000-8000-000000000601",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-14T12:00:00Z",
+    "updatedAt": "2026-09-14T12:00:00Z",
+    "kind": "agent_import",
+    "report": {
+      "schemaVersion": "openarc.agent-import.v1",
+      "importId": "7e570000-0000-4000-8000-0000000006a1",
+      "capturedAt": "2026-09-14T11:00:00Z",
+      "connectorId": "synthetic-agent-v1",
+      "authentication": "not_verified",
+      "events": [
+        {
+          "eventId": "7e570000-0000-4000-8000-0000000006e1",
+          "actionId": "synthetic-action",
+          "occurredAt": "2026-09-14T10:59:00Z",
+          "network": "eip155:5042002",
+          "asset": "0x3600000000000000000000000000000000000000",
+          "decimals": 6,
+          "payer": "0x1111111111111111111111111111111111111111",
+          "recipient": "0x2222222222222222222222222222222222222222",
+          "amountBaseUnits": "9007199254740993000",
+          "reportedStatus": "attempted",
+          "contract": null,
+          "serviceDigest": null,
+          "authorizationNonce": null,
+          "authorizationDomainDigest": null,
+          "approval": "not_supplied"
+        }
+      ]
+    },
+    "linkedAgentProfileRecordId": "7e57a000-0000-4000-8000-00000000000d",
+    "linkBasis": "explicit_local_confirmation"
+  },
+  {
+    "recordSchema": "openarc.agent-policy-record.v2",
+    "recordId": "7e570000-0000-4000-8000-000000000701",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-14T12:00:00Z",
+    "updatedAt": "2026-09-14T12:00:00Z",
+    "kind": "agent_monitoring_policy",
+    "policy": {
+      "schemaVersion": "openarc.agent-policy.v2",
+      "policyId": "7e570000-0000-4000-8000-0000000007a1",
+      "revision": 1,
+      "name": "TEST-ONLY local review policy",
+      "agentProfileRecordId": "7e57a000-0000-4000-8000-00000000000d",
+      "enabled": true,
+      "validAfter": "2026-09-01T00:00:00Z",
+      "validBefore": "2026-10-01T00:00:00Z",
+      "perActionLimit": "1000",
+      "dailyLimit": "1000000",
+      "allowRecipients": [],
+      "blockRecipients": [],
+      "allowContracts": [],
+      "blockContracts": [],
+      "allowServices": [],
+      "blockServices": [],
+      "requireApproval": true,
+      "mode": "local_monitoring_only"
+    }
+  },
+  {
+    "recordSchema": "openarc.workspace-record.v1",
+    "recordId": "7e57a000-0000-4000-8000-000000000002",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAl",
+    "createdAt": "2026-09-15T09:00:00.000Z",
+    "updatedAt": "2026-09-15T09:10:00.000Z",
+    "kind": "sentinel",
+    "marker": "OPENARC_VAULT_SENTINEL_V1",
+    "vaultRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAl",
+    "manifest": [
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000101",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:69e1336ca16e8eb17e4a4db8ff5d697111f59de40acbdd3ce1948c5266b21e74"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000102",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:57ffeba9920900256db70a158050e254ef5a175d4556a2b9d827086f6d81d771"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000201",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:9a506960ad1a155ff7366e14b5b576f32799e65f297003cb0bf0898178fbe016"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000202",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:fede4c441a8962739f4b48cb0533d9a8f5526658e8ec826d2820b373a0f026a7"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000203",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:70f7c1ecd9d35cc82bfb14838e3d1483fe7424048d9b4a4608e77c91267cdba7"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000211",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:ca93bd6c09dc8404a4e6b1b75cb0b189d492e0d7212e7bea39dc71e04335816d"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000212",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:8e3ed565010f185da4cf167f3d6f409872c06ad441b817d4d2106d4e96a68533"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000301",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:73073bbeffbd4ad7694596d82c82e5ab92994c3313aa6af7db636e649e22f3a9"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000311",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:5b98017a5596fa97f3251553b4a62441d830b35da5788cee0b16f716d62b5314"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000401",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:b762648d1e2faef7da05151d6e6ebbf630c22ef670ed63624f119a51cf3622ee"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000411",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:a5c6fe199a0d29f57afd85d4f7ee32657405aca8cab9f314220336216b5be8d2"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000501",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:4cfdeab3480de08071a70a27ea34a78e3997b9456d2e0badd71cd7be3303f2ab"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000502",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:5965b400592794664fd87c6bc1865c2983e79469f988e04295df1fbca94287c7"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000511",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:f31c454e46432192f13e9bf2cdc539de02f7c6180b298257d4c1b35b3c4d41d5"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000601",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:b5a96c0aa24d875c53d540b0fccf0433cd50b462e2746376639a2536750a3ad4"
+      },
+      {
+        "recordId": "7e570000-0000-4000-8000-000000000701",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:cbb2877f07034d01dde1adca5d21e211e8189953c79e5be2100311cdd7958036"
+      },
+      {
+        "recordId": "7e57a000-0000-4000-8000-000000000003",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAl",
+        "digest": "sha256:7faea3f519a16afdd850c99a9f743d0aec67cd333acbca10b601141d92fa9514"
+      },
+      {
+        "recordId": "7e57a000-0000-4000-8000-000000000004",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:7ac2ffa6eccf2a9198075122e9acdc1c9b442345a487cf6913b98591355ecb15"
+      },
+      {
+        "recordId": "7e57a000-0000-4000-8000-000000000005",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:ef42138a66b4a29537f3fbe892f2ba415a931269e4a5c33f3cc552cbfcb194f3"
+      },
+      {
+        "recordId": "7e57a000-0000-4000-8000-000000000006",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:f52e0c9fa4ca300b0fd89d0724d7dc90cf10f076ae37f150e311bb059649fa6c"
+      },
+      {
+        "recordId": "7e57a000-0000-4000-8000-000000000007",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:e543e90fc3b3987b8601425929f994161e422b5acf97e3474ff6ad96a9da4f94"
+      },
+      {
+        "recordId": "7e57a000-0000-4000-8000-000000000008",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:28c63194d31ac17f58bb6c4d2379d52e8e0375a5423b0e3087e5327093a74b48"
+      },
+      {
+        "recordId": "7e57a000-0000-4000-8000-000000000009",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:37fa431be4162dbfda32e5c5ca8dcadb6fcab2aa8e71ae6dbe5c55a0f52d6f0d"
+      },
+      {
+        "recordId": "7e57a000-0000-4000-8000-00000000000a",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:a2abf171355f6b205cda7e610bd1179efe0815d28ab4d3624bdf436806bb2a7f"
+      },
+      {
+        "recordId": "7e57a000-0000-4000-8000-00000000000b",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:fdecac51dfbfa5b03c87867778ad4f141fd3d76782b97de3cb33b94c8d167509"
+      },
+      {
+        "recordId": "7e57a000-0000-4000-8000-00000000000c",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:669c8beb90207e8bf6948f367f61bf2e0b253f0f5f41c52cbac28f7bc0865262"
+      },
+      {
+        "recordId": "7e57a000-0000-4000-8000-00000000000d",
+        "revision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+        "digest": "sha256:dc8bad5cf88489bff32fce31ea008e7cd3254af4de2a7d3ba85d5bbdebb05528"
+      }
+    ]
+  },
+  {
+    "recordSchema": "openarc.workspace-record.v1",
+    "recordId": "7e57a000-0000-4000-8000-000000000003",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAl",
+    "createdAt": "2026-09-15T09:00:00.000Z",
+    "updatedAt": "2026-09-15T09:10:00.000Z",
+    "kind": "workspace_settings",
+    "tourSeen": true,
+    "defaultView": "overview"
+  },
+  {
+    "recordSchema": "openarc.workspace-record.v1",
+    "recordId": "7e57a000-0000-4000-8000-000000000004",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-15T09:05:00.000Z",
+    "updatedAt": "2026-09-15T09:05:00.000Z",
+    "kind": "monitoring_policy",
+    "revision": 1,
+    "policy": {
+      "schemaVersion": "openarc.policy.v1",
+      "policyId": "pol_01000000000000000000000000000000",
+      "label": "Synthetic API payment monitoring policy",
+      "mode": "local_monitoring_only",
+      "enabled": true,
+      "actionKind": "paid_api_request",
+      "network": "eip155:5042002",
+      "asset": "0x3600000000000000000000000000000000000000",
+      "maximumAmountBaseUnits": "999999999999",
+      "allowedRecipients": [
+        "0x9999999999999999999999999999999999999999"
+      ],
+      "expiresAt": "2026-09-02T00:00:00Z"
+    }
+  },
+  {
+    "recordSchema": "openarc.workspace-record.v1",
+    "recordId": "7e57a000-0000-4000-8000-000000000005",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-15T09:05:00.000Z",
+    "updatedAt": "2026-09-15T09:05:00.000Z",
+    "kind": "agent_profile",
+    "agentId": "agent_01000000000000000000000000000000",
+    "displayName": "Complete evidence arc agent",
+    "wallets": [],
+    "frameworkLabel": "Synthetic M01 fixture",
+    "purposeNote": "Local fixture context. This is not a discovered or verified identity.",
+    "policyRecordIds": [
+      "7e57a000-0000-4000-8000-000000000004"
+    ]
+  },
+  {
+    "recordSchema": "openarc.workspace-record.v1",
+    "recordId": "7e57a000-0000-4000-8000-000000000006",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-15T09:05:00.000Z",
+    "updatedAt": "2026-09-15T09:05:00.000Z",
+    "kind": "action_envelope",
+    "action": {
+      "schemaVersion": "openarc.action.v1",
+      "actionId": "act_01000000000000000000000000000000",
+      "agentId": "agent_01000000000000000000000000000000",
+      "kind": "paid_api_request",
+      "createdAt": "2026-09-01T11:59:00Z",
+      "states": [
+        {
+          "sequence": 1,
+          "state": "PROPOSED",
+          "at": "2026-09-01T11:59:00Z",
+          "evidenceIds": []
+        },
+        {
+          "sequence": 2,
+          "state": "PERMITTED",
+          "at": "2026-09-01T12:00:00Z",
+          "evidenceIds": [
+            "evd_01010000000000000000000000000000"
+          ]
+        },
+        {
+          "sequence": 3,
+          "state": "ATTEMPTED",
+          "at": "2026-09-01T12:01:00Z",
+          "evidenceIds": [
+            "evd_01020000000000000000000000000000"
+          ]
+        },
+        {
+          "sequence": 4,
+          "state": "AUTHORIZED",
+          "at": "2026-09-01T12:04:00Z",
+          "evidenceIds": [
+            "evd_01040000000000000000000000000000"
+          ]
+        },
+        {
+          "sequence": 5,
+          "state": "FULFILLED",
+          "at": "2026-09-01T12:05:00Z",
+          "evidenceIds": [
+            "evd_01050000000000000000000000000000"
+          ]
+        },
+        {
+          "sequence": 6,
+          "state": "SETTLED",
+          "at": "2026-09-01T12:07:00Z",
+          "evidenceIds": [
+            "evd_01060000000000000000000000000000"
+          ]
+        }
+      ],
+      "intentEvidenceIds": [
+        "evd_01010000000000000000000000000000"
+      ],
+      "attemptEvidenceIds": [
+        "evd_01020000000000000000000000000000"
+      ],
+      "paymentEvidenceIds": [
+        "evd_01030000000000000000000000000000",
+        "evd_01040000000000000000000000000000"
+      ],
+      "fulfillmentEvidenceIds": [
+        "evd_01050000000000000000000000000000"
+      ],
+      "settlementEvidenceIds": [
+        "evd_01060000000000000000000000000000"
+      ],
+      "policyEvaluation": {
+        "mode": "local_monitoring_only",
+        "state": "permitted",
+        "matchedPolicyIds": [
+          "pol_01000000000000000000000000000000"
+        ],
+        "violations": []
+      },
+      "reconciliation": {
+        "schemaVersion": "openarc.reconciliation.v1",
+        "ruleVersion": "openarc.reconcile.v1",
+        "actionId": "act_01000000000000000000000000000000",
+        "evaluatedAt": "2026-09-01T12:15:00Z",
+        "state": "RECONCILED",
+        "evidenceIds": [
+          "evd_01010000000000000000000000000000",
+          "evd_01020000000000000000000000000000",
+          "evd_01030000000000000000000000000000",
+          "evd_01040000000000000000000000000000",
+          "evd_01050000000000000000000000000000",
+          "evd_01060000000000000000000000000000"
+        ],
+        "gaps": [],
+        "conflicts": [],
+        "limitations": [
+          "Synthetic fixture evidence does not describe a live agent or payment.",
+          "Reconciliation proves only exact agreement between cited normalized records."
+        ],
+        "policyEvaluation": {
+          "mode": "local_monitoring_only",
+          "state": "permitted",
+          "matchedPolicyIds": [
+            "pol_01000000000000000000000000000000"
+          ],
+          "violations": []
+        }
+      }
+    }
+  },
+  {
+    "recordSchema": "openarc.workspace-record.v1",
+    "recordId": "7e57a000-0000-4000-8000-000000000007",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-15T09:05:00.000Z",
+    "updatedAt": "2026-09-15T09:05:00.000Z",
+    "kind": "evidence_record",
+    "evidence": {
+      "schemaVersion": "openarc.evidence.v1",
+      "evidenceId": "evd_01010000000000000000000000000000",
+      "actionId": "act_01000000000000000000000000000000",
+      "source": {
+        "kind": "owner",
+        "sourceId": "owner-local",
+        "label": "Owner-supplied fixture",
+        "reference": "fixture:m01/complete/intent",
+        "origin": null,
+        "environment": "synthetic_fixture",
+        "adapterVersion": "m01.fixture.v1",
+        "network": null
+      },
+      "observedAt": "2026-09-01T12:00:00Z",
+      "occurredAt": "2026-09-01T12:00:00Z",
+      "limitations": [
+        "Owner-supplied intent is not wallet or protocol enforcement."
+      ],
+      "evidenceType": "intent",
+      "class": "local",
+      "payload": {
+        "network": "eip155:5042002",
+        "asset": "0x3600000000000000000000000000000000000000",
+        "payer": "0x2222222222222222222222222222222222222222",
+        "payTo": "0x9999999999999999999999999999999999999999",
+        "amountBaseUnits": "1250000",
+        "authorizationNonce": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "resourceDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "mandateDigest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+      }
+    }
+  },
+  {
+    "recordSchema": "openarc.workspace-record.v1",
+    "recordId": "7e57a000-0000-4000-8000-000000000008",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-15T09:05:00.000Z",
+    "updatedAt": "2026-09-15T09:05:00.000Z",
+    "kind": "evidence_record",
+    "evidence": {
+      "schemaVersion": "openarc.evidence.v1",
+      "evidenceId": "evd_01020000000000000000000000000000",
+      "actionId": "act_01000000000000000000000000000000",
+      "source": {
+        "kind": "agent_connector",
+        "sourceId": "fixture-agent",
+        "label": "Synthetic agent fixture",
+        "reference": "fixture:m01/complete/attempt",
+        "origin": null,
+        "environment": "synthetic_fixture",
+        "adapterVersion": "m01.fixture.v1",
+        "network": null
+      },
+      "observedAt": "2026-09-01T12:01:00Z",
+      "occurredAt": "2026-09-01T12:01:00Z",
+      "limitations": [
+        "Agent-reported attempt does not prove authorization or settlement."
+      ],
+      "evidenceType": "attempt",
+      "class": "agent_reported",
+      "payload": {
+        "network": "eip155:5042002",
+        "asset": "0x3600000000000000000000000000000000000000",
+        "payer": "0x2222222222222222222222222222222222222222",
+        "payTo": "0x9999999999999999999999999999999999999999",
+        "amountBaseUnits": "1250000",
+        "authorizationNonce": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "resourceDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "connectorEventId": "evt_333333333333333333333333"
+      }
+    }
+  },
+  {
+    "recordSchema": "openarc.workspace-record.v1",
+    "recordId": "7e57a000-0000-4000-8000-000000000009",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-15T09:05:00.000Z",
+    "updatedAt": "2026-09-15T09:05:00.000Z",
+    "kind": "evidence_record",
+    "evidence": {
+      "schemaVersion": "openarc.evidence.v1",
+      "evidenceId": "evd_01030000000000000000000000000000",
+      "actionId": "act_01000000000000000000000000000000",
+      "source": {
+        "kind": "provider",
+        "sourceId": "fixture-provider",
+        "label": "Synthetic provider fixture",
+        "reference": "fixture:m01/complete/requirement",
+        "origin": null,
+        "environment": "synthetic_fixture",
+        "adapterVersion": "m01.fixture.v1",
+        "network": null
+      },
+      "observedAt": "2026-09-01T12:02:00Z",
+      "occurredAt": "2026-09-01T12:02:00Z",
+      "limitations": [
+        "A payment requirement is a provider claim, not settlement evidence."
+      ],
+      "evidenceType": "payment_requirement",
+      "class": "provider",
+      "payload": {
+        "network": "eip155:5042002",
+        "asset": "0x3600000000000000000000000000000000000000",
+        "payer": "0x2222222222222222222222222222222222222222",
+        "payTo": "0x9999999999999999999999999999999999999999",
+        "amountBaseUnits": "1250000",
+        "authorizationNonce": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "resourceDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "validAfter": "2026-09-01T11:50:00Z",
+        "validBefore": "2026-09-01T12:30:00Z",
+        "requirementDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    }
+  },
+  {
+    "recordSchema": "openarc.workspace-record.v1",
+    "recordId": "7e57a000-0000-4000-8000-00000000000a",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-15T09:05:00.000Z",
+    "updatedAt": "2026-09-15T09:05:00.000Z",
+    "kind": "evidence_record",
+    "evidence": {
+      "schemaVersion": "openarc.evidence.v1",
+      "evidenceId": "evd_01040000000000000000000000000000",
+      "actionId": "act_01000000000000000000000000000000",
+      "source": {
+        "kind": "owner",
+        "sourceId": "fixture-signature",
+        "label": "Synthetic signed fixture",
+        "reference": "fixture:m01/complete/authorization",
+        "origin": null,
+        "environment": "synthetic_fixture",
+        "adapterVersion": "m01.fixture.v1",
+        "network": null
+      },
+      "observedAt": "2026-09-01T12:04:00Z",
+      "occurredAt": "2026-09-01T12:03:00Z",
+      "limitations": [
+        "Synthetic signature metadata is not a reusable payment authorization."
+      ],
+      "evidenceType": "authorization",
+      "class": "signed",
+      "payload": {
+        "network": "eip155:5042002",
+        "asset": "0x3600000000000000000000000000000000000000",
+        "payer": "0x2222222222222222222222222222222222222222",
+        "payTo": "0x9999999999999999999999999999999999999999",
+        "amountBaseUnits": "1250000",
+        "authorizationNonce": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "resourceDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "validAfter": "2026-09-01T11:50:00Z",
+        "validBefore": "2026-09-01T12:30:00Z",
+        "authorizationDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  },
+  {
+    "recordSchema": "openarc.workspace-record.v1",
+    "recordId": "7e57a000-0000-4000-8000-00000000000b",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-15T09:05:00.000Z",
+    "updatedAt": "2026-09-15T09:05:00.000Z",
+    "kind": "evidence_record",
+    "evidence": {
+      "schemaVersion": "openarc.evidence.v1",
+      "evidenceId": "evd_01050000000000000000000000000000",
+      "actionId": "act_01000000000000000000000000000000",
+      "source": {
+        "kind": "provider",
+        "sourceId": "fixture-provider",
+        "label": "Synthetic provider fixture",
+        "reference": "fixture:m01/complete/fulfillment",
+        "origin": null,
+        "environment": "synthetic_fixture",
+        "adapterVersion": "m01.fixture.v1",
+        "network": null
+      },
+      "observedAt": "2026-09-01T12:05:00Z",
+      "occurredAt": "2026-09-01T12:05:00Z",
+      "limitations": [
+        "Provider fulfillment does not prove response quality or settlement."
+      ],
+      "evidenceType": "fulfillment",
+      "class": "provider",
+      "payload": {
+        "resourceDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "providerStatus": "fulfilled",
+        "responseDigest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+      }
+    }
+  },
+  {
+    "recordSchema": "openarc.workspace-record.v1",
+    "recordId": "7e57a000-0000-4000-8000-00000000000c",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-15T09:05:00.000Z",
+    "updatedAt": "2026-09-15T09:05:00.000Z",
+    "kind": "evidence_record",
+    "evidence": {
+      "schemaVersion": "openarc.evidence.v1",
+      "evidenceId": "evd_01060000000000000000000000000000",
+      "actionId": "act_01000000000000000000000000000000",
+      "source": {
+        "kind": "arc_rpc",
+        "sourceId": "arc-testnet-fixture",
+        "label": "Synthetic Arc Testnet fixture",
+        "reference": "fixture:m01/complete/settlement",
+        "origin": null,
+        "environment": "synthetic_fixture",
+        "adapterVersion": "m01.fixture.v1",
+        "network": "eip155:5042002"
+      },
+      "observedAt": "2026-09-01T12:07:00Z",
+      "occurredAt": "2026-09-01T12:06:00Z",
+      "limitations": [
+        "Synthetic onchain settlement does not prove offchain fulfillment or intent."
+      ],
+      "evidenceType": "settlement",
+      "class": "onchain",
+      "payload": {
+        "network": "eip155:5042002",
+        "asset": "0x3600000000000000000000000000000000000000",
+        "payer": "0x2222222222222222222222222222222222222222",
+        "payTo": "0x9999999999999999999999999999999999999999",
+        "amountBaseUnits": "1250000",
+        "authorizationNonce": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "resourceDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "transactionHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "blockHash": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "blockNumber": "1001",
+        "settlementStatus": "settled"
+      }
+    }
+  },
+  {
+    "recordSchema": "openarc.workspace-record.v1",
+    "recordId": "7e57a000-0000-4000-8000-00000000000d",
+    "recordRevision": "VEVTVE9OTFlURVNUT05MWVRFU1QAAAAJ",
+    "createdAt": "2026-09-15T09:05:00.000Z",
+    "updatedAt": "2026-09-15T09:05:00.000Z",
+    "kind": "agent_profile",
+    "agentId": "agent_544553544f4e4c595445535400000008",
+    "displayName": "TEST-ONLY wallet agent",
+    "wallets": [
+      {
+        "network": "eip155:5042002",
+        "address": "0x5555555555555555555555555555555555555555",
+        "classificationSource": "owner_supplied"
+      }
+    ],
+    "frameworkLabel": "TEST-ONLY framework",
+    "purposeNote": "TEST-ONLY purpose note",
+    "policyRecordIds": []
+  }
+]

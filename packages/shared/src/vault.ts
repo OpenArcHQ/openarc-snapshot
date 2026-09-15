@@ -7,13 +7,32 @@ import {
 } from "./evidence.js";
 import { ARC_TESTNET } from "./network.js";
 import { ArcAccountSnapshotSchema, ArcTransactionEvidenceSchema } from "./arc-observation.js";
-import { AgentRegistryEvidenceSchema } from "./agent-registry-evidence.js";
+import { StoredAgentRegistryEvidenceSchema } from "./agent-registry-evidence.js";
 import { JobEvidenceSchema } from "./job-evidence.js";
 import { X402ReceiptBundleSchema, GatewayTransferObservationSchema } from "./x402-evidence.js";
 import { AgentImportSchema } from "./agent-import.js";
 import { AgentMonitoringPolicySchema } from "./agent-policy.js";
 import { PermissionReceiptRecordSchema } from "./permission.js";
+import { ResearchRunRecordSchema, TaskDraftRecordSchema, TaskReportRecordSchema } from "./vault-root-kinds.js";
 import { VaultRevisionSchema, WorkspaceRecordIdSchema } from "./workspace-primitives.js";
+// P08-01: stored contracts of the ROOT-build kinds (read-only in this build). The SHA-256 helper stays module-private.
+export {
+  AccountReportTaskRequestSchema,
+  ResearchInputSchema,
+  ResearchResultSchema,
+  ResearchRunRecordSchema,
+  TaskDraftRecordSchema,
+  TaskReportRecordSchema,
+  WebResearchResultSchema,
+  accountReportDraftDigest,
+  accountReportRequestDigest,
+  type AccountReportTaskRequest,
+  type ResearchInput,
+  type ResearchResult,
+  type ResearchRunRecord,
+  type TaskDraftRecord,
+  type TaskReportRecord,
+} from "./vault-root-kinds.js";
 export { VaultRevisionSchema, WorkspaceRecordIdSchema } from "./workspace-primitives.js";
 import {
   EvmAddressSchema,
@@ -99,7 +118,8 @@ export const AgentRegistryObservationRecordSchema = z.strictObject({
   kind: z.literal("agent_registry_observation"),
   permissionReceiptId: WorkspaceRecordIdSchema,
   linkedAgentProfileRecordId: WorkspaceRecordIdSchema.nullable(),
-  observation: AgentRegistryEvidenceSchema,
+  // New observations are v2; original M05 v1 records stay readable as unattributed legacy data.
+  observation: StoredAgentRegistryEvidenceSchema,
 });
 
 export const JobObservationRecordSchema = z.strictObject({
@@ -195,7 +215,52 @@ const WorkspaceRecordVariantSchema = z.union([
   GatewayObservationRecordSchema,
   AgentImportRecordSchema,
   AgentMonitoringPolicyRecordSchema,
+  // P08-01 additive members, in ROOT's union order. Existing members above are unchanged.
+  TaskDraftRecordSchema,
+  TaskReportRecordSchema,
+  ResearchRunRecordSchema,
 ]);
+
+/**
+ * Every `kind|recordSchema` pair this build's union knows. A decrypted, authenticated record whose pair is NOT listed
+ * was written by a newer or different build; one whose pair is listed but fails its schema carries content this
+ * build's rules do not accept. Neither is a wrong passphrase. Kept in lock-step with the union by
+ * test/vault-root-kinds.test.ts.
+ */
+export const WORKSPACE_RECORD_IDENTITIES = Object.freeze([
+  "action_envelope|openarc.workspace-record.v1",
+  "agent_import|openarc.agent-import-record.v1",
+  "agent_monitoring_policy|openarc.agent-policy-record.v2",
+  "agent_profile|openarc.workspace-record.v1",
+  "agent_registry_observation|openarc.agent-registry-observation-record.v1",
+  "arc_observation|openarc.arc-observation-record.v1",
+  "evidence_record|openarc.workspace-record.v1",
+  "gateway_observation|openarc.gateway-observation-record.v1",
+  "job_observation|openarc.job-observation-record.v1",
+  "monitoring_policy|openarc.workspace-record.v1",
+  "permission_receipt|openarc.permission-receipt.v1",
+  "permission_receipt|openarc.permission-receipt.v2",
+  "permission_receipt|openarc.permission-receipt.v3",
+  "permission_receipt|openarc.permission-receipt.v4",
+  "permission_receipt|openarc.permission-receipt.v5",
+  "research_run|openarc.research-run.v1",
+  "sentinel|openarc.workspace-record.v1",
+  "task_draft|openarc.task-draft-record.v1",
+  "task_report|openarc.task-report-record.v1",
+  "workspace_settings|openarc.workspace-record.v1",
+  "x402_bundle|openarc.x402-bundle-record.v1",
+] as const);
+const knownRecordIdentities = new Set<string>(WORKSPACE_RECORD_IDENTITIES);
+
+export type WorkspaceRecordIdentityClass = "known" | "unknown" | "malformed";
+
+/** Classifies only the identity pair of an untrusted value. It never inspects or returns any other field. */
+export function classifyWorkspaceRecordIdentity(value: unknown): WorkspaceRecordIdentityClass {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return "malformed";
+  const { kind, recordSchema } = value as { kind?: unknown; recordSchema?: unknown };
+  if (typeof kind !== "string" || typeof recordSchema !== "string") return "malformed";
+  return knownRecordIdentities.has(`${kind}|${recordSchema}`) ? "known" : "unknown";
+}
 
 export const WorkspaceRecordSchema = WorkspaceRecordVariantSchema.superRefine((record, context) => {
   if (!IsoTimestampSchema.safeParse(record.updatedAt).success || !IsoTimestampSchema.safeParse(record.createdAt).success) return;

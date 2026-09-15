@@ -13,10 +13,10 @@ import {
   ARC_TESTNET,
   ArcAccountSnapshotSchema,
   ArcObservationRecordSchema,
-  AgentRegistryEvidenceSchema,
   AgentRegistryObservationRecordSchema,
   AgentRegistryPermissionReceiptRecordSchema,
   CAPABILITY_DISCLOSURE,
+  LegacyAgentRegistryEvidenceV1Schema,
   M01_FIXTURES,
   PermissionReceiptRecordSchema,
   reconcileAction,
@@ -112,7 +112,8 @@ function m05RegistryRecords(recordRevision: string, linkedAgentProfileRecordId: 
     purpose: "Observe one ERC-8004 agent identity and optional exact observer or validator claims at one final Arc Testnet block.",
     ...AGENT_REGISTRY_DISCLOSURE, approvedAt: at, outcome: "completed", resolvedAt: at, failureCode: null,
   });
-  const observation = AgentRegistryEvidenceSchema.parse({ schemaVersion: "openarc.agent-registry-evidence.v1",
+  // Original M05 v1 evidence must remain decryptable as legacy data after the v2 adapter change.
+  const observation = LegacyAgentRegistryEvidenceV1Schema.parse({ schemaVersion: "openarc.agent-registry-evidence.v1",
     network: ARC_TESTNET.caip2, agentId: "1",
     anchor: { blockNumber: "100", blockHash: `0x${"b".repeat(64)}`, blockTimestamp: at,
       finality: "deterministic", confirmations: "1" },

@@ -28,6 +28,7 @@ export default defineConfig({
       "test/control-policy-api.postgres.test.ts",
       "test/control-session-api.postgres.test.ts",
       "test/control-grant-adapter.postgres.test.ts",
+      "test/control-payment-api.postgres.test.ts",
     ],
     fileParallelism: false,
   },

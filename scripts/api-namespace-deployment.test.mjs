@@ -159,6 +159,35 @@ for (const file of SERVER_CONFIGS) {
     }
   });
 
+  test(`${file} fails every payment-family path closed before the namespace guards`, () => {
+    // PORT-04 P04-02c: the payment family's plain denies (or its includes, in
+    // the API templates) must be declared before the namespace guards, and no
+    // payment-family location may ever be `^~` or serve the SPA shell.
+    const guardIndex = source.indexOf("location = /v1 { return 404; }");
+    const fallback = locations.find((entry) => entry.path === "/" && entry.modifier === "");
+    assert.ok(guardIndex !== -1 && fallback, "expected the namespace guard and SPA fallback");
+    if (file === "apps/web/nginx.conf") {
+      for (const prefix of ["/v2/public/payment-capabilities", "/v2/agent/commerce-payment-requirements", "/v2/agent/commerce-payment-attempts"]) {
+        const found = locations.filter((entry) => entry.path === prefix);
+        assert.equal(found.length, 1, `expected exactly one plain deny for ${prefix}`);
+        assert.equal(found[0].modifier, "", `${prefix} must stay a plain prefix`);
+        assert.match(found[0].body.trim(), /^return 404;$/u);
+        assert.ok(found[0].index < fallback.index, `${prefix} must precede the SPA fallback`);
+      }
+    } else {
+      for (const include of ["openarc-payment-capability-locations.inc", "openarc-commerce-payment-locations.inc", "openarc-payment-deny.inc"]) {
+        const at = source.indexOf(`include /etc/nginx/conf.d/${include};`);
+        assert.ok(at !== -1 && at < guardIndex, `${include} must be included before the namespace guards`);
+      }
+    }
+    // Unrouted payment lookalikes still fall under a /v2/ guard, never the SPA.
+    for (const unrouted of ["/v2/agent/commerce-payments", "/v2/agent/commerce-payment-observations", "/v2/public/payment"]) {
+      assert.ok(unrouted.startsWith("/v2/"), `${unrouted} must stay inside the guarded namespace`);
+      assert.ok(!locations.some((entry) => entry.modifier === "" && entry.path !== "/" && unrouted.startsWith(entry.path) && entry.body.includes("try_files")));
+    }
+    assert.ok(!/location\s+\^~\s+\/v2\/(?:agent\/commerce-payment|public\/payment)/u.test(source), "no ^~ payment location");
+  });
+
   test(`${file} never lets an API path reach the SPA fallback`, () => {
     // Every declared API location either proxies, denies, or dispatches to a
     // named location. None may serve the SPA shell.

@@ -1,5 +1,6 @@
 import {
   ARC_TESTNET,
+  accountReportDraftDigest,
   ActionEnvelopeRecordSchema,
   AgentProfileRecordSchema,
   AgentImportRecordSchema, AgentImportSchema, AgentMonitoringPolicyRecordSchema, AgentMonitoringPolicySchema,
@@ -44,6 +45,7 @@ import {
   writeEncryptedRecords,
 } from "./db.js";
 import { VaultError } from "./errors.js";
+import { assertResearchChanges, assertRootKindsReadOnly, assertTaskDraftChanges } from "./root-kinds.js";
 import {
   VAULT_MAX_BACKUP_BYTES,
   VAULT_MAX_RESCUE_BYTES,
@@ -146,6 +148,10 @@ export async function saveWorkspaceRecords(
   const meta = nextMeta(unlocked.meta);
   const versionedChanges = changedRecords.map((record) => versionRecord(record, meta.revision));
   assertAgentRecordChanges(authenticated.records, versionedChanges);
+  // P08-01: ROOT's write-side rules (in ROOT's order), then this build's read-only rule for ROOT-build kinds.
+  assertTaskDraftChanges(authenticated.records, versionedChanges);
+  assertResearchChanges(authenticated.records, versionedChanges);
+  assertRootKindsReadOnly(authenticated.records, versionedChanges);
   const changedIds = new Set(versionedChanges.map((record) => record.recordId));
   if (changedIds.size !== changedRecords.length) {
     throw new VaultError("INVALID_BACKUP", "A workspace write contains duplicate record IDs.");
@@ -690,6 +696,26 @@ function assertWorkspaceRelationships(
   requireUnique(agentImports.map((record) => record.report.importId));
   requireUnique(agentPolicies.map((record) => record.policy.policyId));
   const localAgentRecordIds = new Set(agents.map((record) => record.recordId));
+  // P08-01: ROOT relationship rules for task_draft / task_report / research_run, verbatim from
+  // apps/web/src/vault/service.ts:698-715 of the ROOT build (sha256 379ab1d5...). Neither looser nor stricter.
+  const taskDrafts = parsedRecords.filter((record) => record.kind === "task_draft");
+  requireUnique(taskDrafts.map(record => record.taskId));
+  if (taskDrafts.some(record => !localAgentRecordIds.has(record.agentProfileRecordId))) invalidRelationships();
+  const reports = parsedRecords.filter(record => record.kind === "task_report");
+  for (const run of parsedRecords.filter(record => record.kind === "research_run")) {
+    const draft = taskDrafts.find(record => record.recordId === run.taskDraftRecordId);
+    if (!draft || run.taskDigest !== accountReportDraftDigest(draft)) invalidRelationships();
+  }
+  requireUnique(reports.map(record => record.observationRecordId));
+  for (const report of reports) {
+    const draft = taskDrafts.find(record => record.recordId === report.taskDraftRecordId);
+    const observation = observations.find(record => record.recordId === report.observationRecordId)?.observation;
+    if (!draft || report.request.taskId !== draft.taskId ||
+      report.request.agentProfileRecordId !== draft.agentProfileRecordId ||
+      report.request.taskDigest !== accountReportDraftDigest(draft) ||
+      !observation || observation.schemaVersion !== "openarc.arc-account-snapshot.v1" ||
+      observation.address !== report.request.address || observation.network !== report.request.network) invalidRelationships();
+  }
   if (agentImports.some((record) => !localAgentRecordIds.has(record.linkedAgentProfileRecordId)) ||
     agentPolicies.some((record) => !localAgentRecordIds.has(record.policy.agentProfileRecordId))) invalidRelationships();
   requireUnique(bundles.map((record) => record.bundle.bundleId));

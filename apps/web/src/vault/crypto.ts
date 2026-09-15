@@ -2,11 +2,12 @@ import {
   IsoTimestampSchema,
   SentinelRecordSchema,
   WorkspaceRecordSchema,
+  classifyWorkspaceRecordIdentity,
   type SentinelRecord,
   type WorkspaceRecord,
 } from "@openarc/shared";
 
-import { VaultError } from "./errors.js";
+import { VaultError, VaultIncompatibleError } from "./errors.js";
 import {
   VAULT_BACKUP_MAGIC,
   VAULT_DATABASE_VERSION,
@@ -16,7 +17,7 @@ import {
   VAULT_KEY_VERSION,
   VAULT_MAX_BACKUP_BYTES,
   VAULT_MAX_RECORDS,
-  VAULT_RECORD_CAPS,
+  VAULT_RECORD_CAPS_BY_KIND,
   VAULT_RECORD_SCHEMA,
   VAULT_SCHEMA_VERSION,
   VAULT_WRAP_KDF_ITERATIONS,
@@ -175,7 +176,7 @@ export async function unlockVaultSnapshot(
     const records = await decryptAndValidateSnapshot(meta, key, envelopes);
     return { meta, key, records };
   } catch (error) {
-    if (error instanceof VaultError && error.code === "VAULT_CAPACITY") throw error;
+    if (error instanceof VaultError && (error.code === "VAULT_CAPACITY" || error.code === "VAULT_INCOMPATIBLE")) throw error;
     throw new VaultError("INVALID_PASSPHRASE", "Wrong passphrase or damaged workspace.");
   }
 }
@@ -234,6 +235,7 @@ export async function decryptWorkspaceRecord(
 ): Promise<WorkspaceRecord> {
   const parsedMeta = parsePublicVaultMeta(meta);
   const envelope = parseEncryptedEnvelope(envelopeInput);
+  let value: unknown;
   try {
     const plaintext = await crypto.subtle.decrypt(
       {
@@ -245,14 +247,27 @@ export async function decryptWorkspaceRecord(
       key,
       fromBase64Url(envelope.ciphertext),
     );
-    const record = WorkspaceRecordSchema.parse(JSON.parse(decoder.decode(plaintext)) as unknown);
-    if (record.recordId !== envelope.id || record.recordRevision !== envelope.revision) {
-      throw new Error("Record identifier or revision mismatch");
-    }
-    return record;
+    value = JSON.parse(decoder.decode(plaintext)) as unknown;
   } catch {
-    throw new VaultError("INVALID_BACKUP", "An encrypted workspace record is damaged or incompatible.");
+    throw damagedRecord();
   }
+  // From here the plaintext is authenticated. Identity binding is a damage check for every kind, known or not.
+  const identity = value as { recordId?: unknown; recordRevision?: unknown } | null;
+  if (typeof value !== "object" || identity === null || identity.recordId !== envelope.id ||
+    identity.recordRevision !== envelope.revision) {
+    throw damagedRecord();
+  }
+  const parsed = WorkspaceRecordSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  // P08-01: only this parse-failure path changes. The record never leaves this function and is not described.
+  const identityClass = classifyWorkspaceRecordIdentity(value);
+  if (identityClass === "malformed") throw damagedRecord();
+  throw new VaultIncompatibleError("vault",
+    identityClass === "unknown" ? "unknown_record_identity" : "unsupported_record_content");
+}
+
+function damagedRecord(): VaultError {
+  return new VaultError("INVALID_BACKUP", "An encrypted workspace record is damaged or incompatible.");
 }
 
 export async function createManifestSentinel(
@@ -312,7 +327,7 @@ export async function changeVaultPassphrase(
       records,
     };
   } catch (error) {
-    if (error instanceof VaultError && error.code === "VAULT_CAPACITY") throw error;
+    if (error instanceof VaultError && (error.code === "VAULT_CAPACITY" || error.code === "VAULT_INCOMPATIBLE")) throw error;
     throw new VaultError("INVALID_PASSPHRASE", "Wrong passphrase or damaged workspace.");
   }
 }
@@ -354,7 +369,7 @@ export async function recoverVaultSnapshot(
       recoverySecret: nextRecoverySecret,
     };
   } catch (error) {
-    if (error instanceof VaultError && error.code === "VAULT_CAPACITY") throw error;
+    if (error instanceof VaultError && (error.code === "VAULT_CAPACITY" || error.code === "VAULT_INCOMPATIBLE")) throw error;
     throw new VaultError("RECOVERY_FAILED", "Wrong passphrase or damaged workspace.");
   }
 }
@@ -429,7 +444,7 @@ export async function decryptEncryptedBackup(
     const archive = parseLogicalBackupArchive(JSON.parse(decoder.decode(plaintext)) as unknown);
     return { archive, records: archive.records };
   } catch (error) {
-    if (error instanceof VaultError && error.code === "VAULT_CAPACITY") throw error;
+    if (error instanceof VaultError && (error.code === "VAULT_CAPACITY" || error.code === "VAULT_INCOMPATIBLE")) throw error;
     throw new VaultError("INVALID_BACKUP", "Wrong backup passphrase or damaged encrypted backup.");
   }
 }
@@ -565,7 +580,7 @@ export function assertWorkspaceRecordCapacity(records: readonly WorkspaceRecord[
   }
   const counts = new Map<WorkspaceRecord["kind"], number>();
   for (const record of records) counts.set(record.kind, (counts.get(record.kind) ?? 0) + 1);
-  for (const [kind, maximum] of Object.entries(VAULT_RECORD_CAPS)) {
+  for (const [kind, maximum] of Object.entries(VAULT_RECORD_CAPS_BY_KIND)) {
     if ((counts.get(kind as WorkspaceRecord["kind"]) ?? 0) > maximum) {
       throw new VaultError("VAULT_CAPACITY", `The encrypted workspace ${kind} limit is ${maximum}.`);
     }
@@ -640,12 +655,23 @@ async function decryptAndValidateSnapshot(
   envelopes: readonly EncryptedEnvelope[],
 ): Promise<WorkspaceRecord[]> {
   assertVaultCapacity(meta, envelopes);
-  const records = await Promise.all(envelopes.map((envelope) => decryptWorkspaceRecord(meta, key, envelope)));
+  // Every envelope is authenticated before any verdict, so the outcome never depends on decryption timing: damage
+  // anywhere wins over incompatibility, and incompatibility is reported only for a Vault whose sentinel and manifest
+  // also verify.
+  const settled = await Promise.allSettled(envelopes.map((envelope) => decryptWorkspaceRecord(meta, key, envelope)));
+  const records: WorkspaceRecord[] = [];
+  let incompatible: VaultIncompatibleError | null = null;
+  for (const result of settled) {
+    if (result.status === "fulfilled") records.push(result.value);
+    else if (result.reason instanceof VaultIncompatibleError) incompatible ??= result.reason;
+    else throw result.reason;
+  }
   const sentinels = records.filter((record) => record.kind === "sentinel");
   if (sentinels.length !== 1 || sentinels[0]?.recordId !== meta.sentinelRecordId) {
     throw invalidBackup();
   }
   await verifyManifest(meta, envelopes, sentinels[0]);
+  if (incompatible) throw incompatible;
   assertWorkspaceRecordCapacity(records);
   return records.sort((left, right) => left.recordId.localeCompare(right.recordId));
 }
@@ -698,7 +724,22 @@ function parseLogicalBackupArchive(value: unknown): LogicalBackupArchive {
   if (!Array.isArray(value.records) || value.records.length < 1 || value.records.length >= VAULT_MAX_RECORDS) {
     throw invalidBackup();
   }
-  const records = value.records.map((record) => WorkspaceRecordSchema.parse(record));
+  const records: WorkspaceRecord[] = [];
+  let incompatible: VaultIncompatibleError | null = null;
+  for (const candidate of value.records as unknown[]) {
+    const parsed = WorkspaceRecordSchema.safeParse(candidate);
+    if (parsed.success) {
+      records.push(parsed.data);
+      continue;
+    }
+    // P08-01: the archive already authenticated under the backup passphrase. A damaged record wins over any
+    // incompatible one; nothing about either record is described.
+    const identityClass = classifyWorkspaceRecordIdentity(candidate);
+    if (identityClass === "malformed") throw invalidBackup();
+    incompatible ??= new VaultIncompatibleError("backup",
+      identityClass === "unknown" ? "unknown_record_identity" : "unsupported_record_content");
+  }
+  if (incompatible) throw incompatible;
   if (new Set(records.map((record) => record.recordId)).size !== records.length) throw invalidBackup();
   if (records.some((record) => record.kind === "sentinel")) throw invalidBackup();
   assertLogicalBackupCapacity(records);

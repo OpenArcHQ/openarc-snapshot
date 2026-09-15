@@ -16,6 +16,12 @@ import {
   createCommerceGrantSessionReadAdapter,
   createCommerceGrantStoreAdapter,
 } from "./control/grant-store-adapter.js";
+import { startCommercePaymentRuntime, type StartedCommercePaymentRuntime } from "./control/payment-runtime.js";
+import {
+  createCommercePaymentActionReadAdapter,
+  createCommercePaymentSessionReadAdapter,
+  createCommercePaymentStoreAdapter,
+} from "./control/payment-store-adapter.js";
 import { ArcAccountService } from "./arc/account-service.js";
 import { AgentRegistryService } from "./arc/agent-registry-service.js";
 import { JobService } from "./arc/job-service.js";
@@ -27,10 +33,12 @@ import {
   asControlActionPool,
   asControlActionReadPool,
   asControlGrantPool,
+  asControlPaymentAttemptPool,
   CommerceSessionStore,
   ControlActionReadStore,
   ControlActionStore,
   ControlGrantStore,
+  ControlPaymentAttemptStore,
   createDatabasePool,
 } from "@openarc/db";
 import { connectBudgetRedis, SourceBudget } from "./limits/budget.js";
@@ -170,6 +178,61 @@ async function startBoundCommerceGrantRuntime(
   }
 }
 
+/**
+ * Opens the migration-0015 payment family's ONE owned restricted pool and binds
+ * every seam the payment runtime requires: the schema15 payment-attempt store,
+ * the DB10 action store (the agent action read that supplies the server-derived
+ * attempt value) and the DB9/DB13 commerce-session read. The observation
+ * recorder is migrator-private and is never bound. Pool ownership, lifecycle
+ * and the fail-closed `built_disabled` handling mirror the grant helper above.
+ */
+async function startBoundCommercePaymentRuntime(
+  tenantDatabaseUrl: string,
+  authSecret: string,
+  auth: NonNullable<StartedAuthRuntime>["service"],
+  rateLimitStore: NonNullable<StartedAuthRuntime>["rateLimitStore"],
+): Promise<StartedCommercePaymentRuntime> {
+  const pool = createDatabasePool(tenantDatabaseUrl);
+  let poolClosed = false;
+  const closePool = async (): Promise<void> => {
+    if (poolClosed) return;
+    poolClosed = true;
+    await pool.end().catch(() => undefined);
+  };
+  try {
+    const payments = new ControlPaymentAttemptStore(asControlPaymentAttemptPool(pool));
+    const actions = new ControlActionStore(asControlActionPool(pool));
+    const sessions = new CommerceSessionStore(asCommerceSessionPool(pool));
+    const started = await startCommercePaymentRuntime({
+      enabled: true,
+      authSecret,
+      auth,
+      rateLimitStore,
+      store: createCommercePaymentStoreAdapter(payments),
+      actions: createCommercePaymentActionReadAdapter(actions),
+      commerceSessions: createCommercePaymentSessionReadAdapter(sessions),
+      lifecycle: {
+        initialize: async (): Promise<void> => {
+          await payments.initialize();
+          await actions.initialize();
+          await sessions.initialize();
+        },
+        readiness: async (): Promise<void> => {
+          await payments.readiness();
+          await actions.readiness();
+          await sessions.readiness();
+        },
+        close: closePool,
+      },
+    });
+    if (started.service === undefined) await closePool();
+    return started;
+  } catch (error) {
+    await closePool();
+    throw error;
+  }
+}
+
 async function start(): Promise<void> {
   const config = loadConfig();
   const metrics = new AggregateMetrics();
@@ -181,6 +244,7 @@ async function start(): Promise<void> {
   let commerceSessionRuntimeHandle: StartedCommerceSessionRuntime | undefined;
   let commerceActionRuntimeHandle: StartedCommerceActionRuntime | undefined;
   let commerceGrantRuntimeHandle: StartedCommerceGrantRuntime | undefined;
+  let commercePaymentRuntimeHandle: StartedCommercePaymentRuntime | undefined;
   let redis: Awaited<ReturnType<typeof connectBudgetRedis>> | undefined;
   let sourceBudget: SourceBudget | undefined;
   let rpc: ArcRpcClient | undefined;
@@ -297,6 +361,16 @@ async function start(): Promise<void> {
           authRuntimeHandle!.rateLimitStore,
         )
       : undefined;
+    // The payment family is DEFAULT OFF and fails closed exactly like the grant
+    // family: a `built_disabled` outcome hands `createApp` no service.
+    commercePaymentRuntimeHandle = config.COMMERCE_PAYMENTS_ENABLED
+      ? await startBoundCommercePaymentRuntime(
+          config.TENANT_DATABASE_URL as string,
+          config.AUTH_SECRET as string,
+          authRuntimeHandle!.service,
+          authRuntimeHandle!.rateLimitStore,
+        )
+      : undefined;
     redis = config.ARC_OBSERVATION_ENABLED && config.REDIS_URL ? await connectBudgetRedis(config.REDIS_URL) : undefined;
     sourceBudget = redis && config.ABUSE_LIMIT_SECRET ? new SourceBudget(redis, {
       secret: config.ABUSE_LIMIT_SECRET,
@@ -370,6 +444,12 @@ async function start(): Promise<void> {
             commerceGrantReady: () => commerceGrantRuntimeHandle!.ready(),
           }
         : {}),
+      ...(commercePaymentRuntimeHandle?.service !== undefined
+        ? {
+            commercePaymentService: commercePaymentRuntimeHandle.service,
+            commercePaymentReady: () => commercePaymentRuntimeHandle!.ready(),
+          }
+        : {}),
       ...(config.GATEWAY_EVIDENCE_ENABLED ? { gatewayTransferService: new GatewayTransferService(new BoundedGatewayClient({
         timeoutMs: config.SOURCE_TIMEOUT_MS, maxResponseBytes: config.SOURCE_MAX_RESPONSE_BYTES,
       })) } : {}),
@@ -388,6 +468,7 @@ async function start(): Promise<void> {
       await commerceSessionRuntimeHandle?.close();
       await commerceActionRuntimeHandle?.close();
       await commerceGrantRuntimeHandle?.close();
+      await commercePaymentRuntimeHandle?.close();
       if (redis?.isOpen) redis.destroy();
       process.exit(0);
     };
@@ -406,6 +487,7 @@ async function start(): Promise<void> {
     await commerceSessionRuntimeHandle?.close().catch(() => undefined);
     await commerceActionRuntimeHandle?.close().catch(() => undefined);
     await commerceGrantRuntimeHandle?.close().catch(() => undefined);
+    await commercePaymentRuntimeHandle?.close().catch(() => undefined);
     if (redis?.isOpen) redis.destroy();
     throw error;
   }

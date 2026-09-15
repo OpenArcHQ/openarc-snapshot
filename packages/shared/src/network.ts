@@ -78,6 +78,24 @@ export const ARC_ERC8004 = Object.freeze({
   contractsRevision: "b9e466c250744a7e06b13dff9d3c2844ed64f825",
 } as const);
 
+/**
+ * Reviewed ERC-1967/UUPS deployment pins for the three ERC-8004 proxies. One EOA can
+ * upgrade them, so every observation re-reads the implementation slot and owner at its
+ * anchor and reports any difference as drift. Source: PORT-06 contract research
+ * 2026-09-15, facts D7 and D13 (read-only eth_getStorageAt / owner() calls).
+ */
+export const ARC_ERC8004_DEPLOYMENT = Object.freeze({
+  reviewedAt: "2026-09-15",
+  sourceRevision: "port06-identity-reputation-contract-2026-09-15",
+  implementationSlot: "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+  proxyOwner: "0x547289319c3e6aedb179c0b8e8af0b5acd062603",
+  implementations: Object.freeze({
+    identity: "0x7274e874ca62410a93bd8bf61c69d8045e399c02",
+    reputation: "0x16e0fa7f7c56b9a767e34b192b51f921be31da34",
+    validation: "0xdb31f5d9167f8ebc8b30fbbf814c4d297c2d7f99",
+  } as const),
+} as const);
+
 /** Reviewed deployed reference, not an assertion about every ERC-8183 deployment. */
 export const ARC_ERC8183 = Object.freeze({
   reviewedAt: "2026-09-04",

@@ -1,0 +1,57 @@
+{
+  "packet": "P08-00",
+  "warning": "TEST-ONLY synthetic fixtures. Secrets below protect only these files. Never regenerate to make a compatibility test pass.",
+  "integrationCommit": "0f5caa9",
+  "generator": "apps/web/test/vault-compat/generate-fixtures.ts",
+  "command": "cd apps/web && npx vitest run --config test/vault-compat/vitest.generate.config.ts",
+  "secrets": {
+    "workspacePassphrase": "TEST-ONLY vault-compat workspace passphrase P08-00",
+    "backupPassphrase": "TEST-ONLY vault-compat backup passphrase P08-00",
+    "recoverySecret": "OA1-VEVTVE9OTFlURVNUT05MWVRFU1RPTkxZVEVTVAAAAAE"
+  },
+  "recordCountsByKind": {
+    "action_envelope": 1,
+    "agent_import": 1,
+    "agent_monitoring_policy": 1,
+    "agent_profile": 2,
+    "agent_registry_observation": 1,
+    "arc_observation": 2,
+    "evidence_record": 6,
+    "gateway_observation": 1,
+    "job_observation": 1,
+    "monitoring_policy": 1,
+    "permission_receipt": 8,
+    "sentinel": 1,
+    "workspace_settings": 1,
+    "x402_bundle": 1
+  },
+  "receiptSchemas": [
+    "openarc.permission-receipt.v1",
+    "openarc.permission-receipt.v2",
+    "openarc.permission-receipt.v3",
+    "openarc.permission-receipt.v4",
+    "openarc.permission-receipt.v5"
+  ],
+  "files": {
+    "encrypted-backup.v1.openarc": {
+      "bytes": 45240,
+      "sha256": "06f004c3315da44b870ca00ca1bb9c4b9d8f41c2aba5a168d3844ab2f1a2ba65"
+    },
+    "logical-backup.v1.json": {
+      "bytes": 44135,
+      "sha256": "fcc27d742b71b9090892b817a300588e1801594e63f5bc1d01bcc007223f468d"
+    },
+    "opaque-rescue.v1.json": {
+      "bytes": 58050,
+      "sha256": "c4c7dd9dafb1925be40125a77abc29261e8c51fa9fd9c8b4f4f84da27f2ea8da"
+    },
+    "vault-snapshot.v1.expected-records.json": {
+      "bytes": 48384,
+      "sha256": "43ffa132c6a7a3d24f2315e17b6a4ed9b1605bede40e92d0ba15f8f95cd591ff"
+    },
+    "vault-snapshot.v1.json": {
+      "bytes": 61132,
+      "sha256": "bb6cab09eeb85d1051b15703de4a514d1cb312a2cb35b3d1e7ecd13fddbcd46d"
+    }
+  }
+}

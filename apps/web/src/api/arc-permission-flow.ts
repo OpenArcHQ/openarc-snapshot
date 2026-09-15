@@ -34,6 +34,8 @@ export interface ArcObservationFlowOptions {
   assertActive: () => void;
   save: (workspace: UnlockedWorkspace, records: readonly WorkspaceRecord[], assertActive: () => void,
     signal: AbortSignal) => Promise<UnlockedWorkspace>;
+  /** Durable pre-egress recheck of the stored Vault revision and lock signal. */
+  verifyStored?: (workspace: UnlockedWorkspace) => Promise<void>;
   request: (input: ArcObservationInput, signal: AbortSignal) => Promise<ArcObservationEnvelope>;
   now?: () => string;
   id?: () => string;
@@ -78,6 +80,10 @@ export async function runArcObservationPermissionFlow(options: ArcObservationFlo
     ...ARC_OBSERVATION_DISCLOSURE, approvedAt, outcome: "approved", resolvedAt: null, failureCode: null,
   });
   let current = await options.save(options.workspace, [approved], options.assertActive, options.signal);
+  options.assertActive();
+  // A peer lock/save/deletion committed in IndexedDB but not yet observed by
+  // this tab must stop the request, not only an in-memory generation change.
+  await options.verifyStored?.(current);
   options.assertActive();
 
   let envelope: ArcObservationEnvelope;

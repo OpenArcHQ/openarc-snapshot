@@ -16,6 +16,8 @@ export interface GatewayFlowOptions {
   assertActive: () => void;
   save: (workspace: UnlockedWorkspace, records: readonly WorkspaceRecord[], assertActive: () => void,
     signal: AbortSignal) => Promise<UnlockedWorkspace>;
+  /** Durable pre-egress recheck of the stored Vault revision and lock signal. */
+  verifyStored?: (workspace: UnlockedWorkspace) => Promise<void>;
   fetch: (request: GatewayTransferRequest, signal: AbortSignal) => Promise<GatewayTransferEnvelope>;
   now?: () => string;
   id?: () => string;
@@ -51,6 +53,10 @@ export async function runGatewayPermissionFlow(options: GatewayFlowOptions): Pro
     ...GATEWAY_DISCLOSURE, approvedAt, outcome: "approved", resolvedAt: null, failureCode: null,
   });
   let current = await options.save(options.workspace, [approved], options.assertActive, options.signal);
+  options.assertActive();
+  // A peer lock/save/deletion committed in IndexedDB but not yet observed by
+  // this tab must stop the request, not only an in-memory generation change.
+  await options.verifyStored?.(current);
   options.assertActive();
   let envelope: GatewayTransferEnvelope;
   try { envelope = await options.fetch(request, options.signal); }

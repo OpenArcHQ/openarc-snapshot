@@ -284,7 +284,7 @@ jobs:
             -e ABUSE_LIMIT_SECRET=synthetic_abuse_limit_secret_for_ci_0004 \
             -e SOURCE_PROXY_SECRET=synthetic_source_proxy_secret_for_ci_0004 \
             -e REQUESTS_PER_IP_HOUR=3 \
-            -e SOURCE_MAX_SUBCALLS=11 \
+            -e SOURCE_MAX_SUBCALLS=16 \
             -e METRICS_TOKEN=synthetic_metrics_token_for_ci_only_0004 \
             -v "${PWD}/tmp/m04-tls/rpc-ca.crt:/tmp/rpc-ca.crt:ro" \
             openarc-api-m03:ci

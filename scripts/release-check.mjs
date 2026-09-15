@@ -269,7 +269,7 @@ for (const requiredToken of [
   "openarc.agent-registry-observation-record.v1", "openarc.capabilities.m05.v1",
   "arc_agent_registry_evidence", "erc8004_registries", "observer_specific_claim",
   "validator_specific_response", "untrusted_external_metadata", "fetched: z.literal(false)",
-  "revertAsNotFound", "SOURCE_NOT_FOUND", "SOURCE_CONFLICT", "SOURCE_MAX_SUBCALLS < 10",
+  "revertAsNotFound", "SOURCE_NOT_FOUND", "SOURCE_CONFLICT", "SOURCE_MAX_SUBCALLS < 16",
   "linkedAgentProfileRecordId", "Local profile and label", "Not released",
 ]) {
   if (!m05Runtime.includes(requiredToken)) failures.push(`M05 ERC-8004 evidence contract is missing ${requiredToken}`);
@@ -387,7 +387,7 @@ for (const requiredToken of [
 }
 for (const requiredToken of [
   "openarc-web-m05:ci", "VITE_AGENT_REGISTRY_ENABLED=true", "AGENT_REGISTRY_ENABLED=true",
-  "SOURCE_MAX_SUBCALLS=11", "e2e:agent-registry:production", '"agentRegistry":true',
+  "SOURCE_MAX_SUBCALLS=16", "e2e:agent-registry:production", '"agentRegistry":true',
   "image --exit-code 1 --severity HIGH,CRITICAL openarc-web-m05:ci",
   "openarc-web-m05:ci -o cyclonedx-json > sbom-web-m05.cdx.json",
 ]) {
@@ -397,7 +397,7 @@ for (const requiredToken of [
 const networkSource = await readFile(path.join(root, "packages/shared/src/network.ts"), "utf8");
 for (const requiredToken of [
   "openarc-web-m06:ci", "VITE_AGENT_JOBS_ENABLED=true", "AGENT_JOBS_ENABLED=true",
-  "SOURCE_MAX_SUBCALLS=11", "e2e:job-evidence:production", '"agentJobs":true',
+  "SOURCE_MAX_SUBCALLS=16", "e2e:job-evidence:production", '"agentJobs":true',
   "image --exit-code 1 --severity HIGH,CRITICAL openarc-web-m06:ci",
   "openarc-web-m06:ci -o cyclonedx-json > sbom-web-m06.cdx.json",
 ]) {

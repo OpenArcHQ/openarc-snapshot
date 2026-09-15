@@ -17,6 +17,13 @@ const jobContract = "0x0747eef0706327138c69792bf28cd525089e4583";
 const jobImplementation = "0xa316fd02827242d537f84730f8a37d0ba5fd351a";
 const implementationSlot = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 const registryOwner = "0x1111111111111111111111111111111111111111";
+// Reviewed ERC-8004 proxy pins (PORT-06 D7/D13). The fixture reports no drift.
+const registryProxyOwner = "0x547289319c3e6aedb179c0b8e8af0b5acd062603";
+const registryImplementations = new Map([
+  [identityRegistry, "0x7274e874ca62410a93bd8bf61c69d8045e399c02"],
+  [reputationRegistry, "0x16e0fa7f7c56b9a767e34b192b51f921be31da34"],
+  [validationRegistry, "0xdb31f5d9167f8ebc8b30fbbf814c4d297c2d7f99"],
+]);
 const agentWallet = "0x2222222222222222222222222222222222222222";
 const feedbackObserver = "0x3333333333333333333333333333333333333333";
 const validationObserver = "0x4444444444444444444444444444444444444444";
@@ -58,6 +65,8 @@ const receipt = { transactionHash, blockHash, blockNumber: "0x64", transactionIn
 function result(method, params) {
   if (method === "eth_getStorageAt" && params.length === 3 && params[0] === jobContract &&
     params[1] === implementationSlot && params[2] === "0x64") return singleAddress(jobImplementation);
+  if (method === "eth_getStorageAt" && params.length === 3 && registryImplementations.has(params[0]) &&
+    params[1] === implementationSlot && params[2] === "0x64") return singleAddress(registryImplementations.get(params[0]));
   if (method === "eth_chainId" && params.length === 0) return "0x4cef52";
   if (method === "eth_getBlockByNumber" && params.length === 2 && params[1] === false &&
     (params[0] === "latest" || params[0] === "0x64")) return block;
@@ -87,6 +96,7 @@ function result(method, params) {
       return feedbackResult();
     }
     if (target === validationRegistry && data === `0xff2febfc${validationRequestHash.slice(2)}`) return validationResult();
+    if (registryImplementations.has(target) && data === "0x8da5cb5b") return singleAddress(registryProxyOwner);
   }
   if (method === "eth_getTransactionByHash" && params[0] === transactionHash) return transaction;
   if (method === "eth_getTransactionReceipt" && params[0] === transactionHash) return receipt;

@@ -30,7 +30,7 @@ function setup() {
   const config = loadConfig({ NODE_ENV: "test", APP_ORIGIN: origin, COMMIT_SHA: "test-sha",
     API_BOUNDARY_ENABLED: "true", ARC_OBSERVATION_ENABLED: "true", AGENT_REGISTRY_ENABLED: "true", AGENT_JOBS_ENABLED: "true",
     REDIS_URL: "redis://127.0.0.1:6379", ABUSE_LIMIT_SECRET: "synthetic_abuse_secret_for_m06_tests",
-    SOURCE_PROXY_SECRET: proxySecret, METRICS_TOKEN: metricsToken, SOURCE_MAX_SUBCALLS: "11" });
+    SOURCE_PROXY_SECRET: proxySecret, METRICS_TOKEN: metricsToken, SOURCE_MAX_SUBCALLS: "16" });
   const app = createApp({ config, sourceBudget: budget, logSink: (entry) => logs.push(entry),
     arcAccountService: {} as ArcAccountService, arcTransactionService: {} as ArcTransactionService,
     agentRegistryService: {} as AgentRegistryService, jobService: { observe } as unknown as JobService });
@@ -82,7 +82,7 @@ describe("M06 job evidence route", () => {
     expect(() => loadConfig({ NODE_ENV: "test", API_BOUNDARY_ENABLED: "true", ARC_OBSERVATION_ENABLED: "true",
       AGENT_REGISTRY_ENABLED: "true", AGENT_JOBS_ENABLED: "true", REDIS_URL: "redis://127.0.0.1:6379",
       ABUSE_LIMIT_SECRET: "synthetic_abuse_secret_for_m06_tests", SOURCE_PROXY_SECRET: proxySecret,
-      SOURCE_MAX_SUBCALLS: "10" })).toThrow();
+      SOURCE_MAX_SUBCALLS: "15" })).toThrow();
   });
 
   it("rejects untrusted requests before spending a source unit and omits identifiers from logs", async () => {

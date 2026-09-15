@@ -11,6 +11,7 @@ import { flushSync } from "react-dom";
 
 import { accountAccessEnabled } from "../account/availability.js";
 import { AccountFlowController } from "../account/flow-controller.js";
+import { VaultSessionEndWatcher } from "../app/vault-session-lock.js";
 import type { TenantFetch } from "./tenant-client.js";
 import {
   MAX_PAGE_LIMIT,
@@ -799,6 +800,24 @@ export default function TenantApp() {
   // it; a signed-out/expired transition (for example a self-demotion that
   // revoked this session) keeps the same account's committed evidence on
   // screen. Hidden/logout/navigation clears run separately in the flow.
+  // Account change or session expiry/sign-out locks the local Vault in every
+  // tab (R55, P08-02). Only settled principals count: the transient `loading`
+  // state of an explicit refresh never locks. The Vault code is lazy-loaded.
+  const principalStatus = state.principal.status;
+  const vaultWatcherRef = useRef<VaultSessionEndWatcher | null>(null);
+  useEffect(() => {
+    const watcher = new VaultSessionEndWatcher();
+    vaultWatcherRef.current = watcher;
+    return () => {
+      watcher.dispose();
+      if (vaultWatcherRef.current === watcher) vaultWatcherRef.current = null;
+    };
+  }, []);
+  useEffect(() => {
+    if (principalStatus === "idle" || principalStatus === "loading") return;
+    void vaultWatcherRef.current?.observe(accountId);
+  }, [accountId, principalStatus]);
+
   const lastAccountRef = useRef<string | null>(null);
   useEffect(() => {
     if (accountId === null) return;

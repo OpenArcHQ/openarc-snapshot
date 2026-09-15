@@ -16,7 +16,13 @@ import {
 } from "@openarc/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  VAULT_LOCK_ATTENTION_NOTICE,
+  VaultSessionEndWatcher,
+  vaultLockNeedsAttention,
+} from "../app/vault-session-lock.js";
 import { accountAccessEnabled } from "./availability.js";
+import { logoutFailureLocksVault } from "./logout-vault-lock.js";
 import {
   ACCOUNT_API_PATHS,
   AccountApiError,
@@ -73,6 +79,16 @@ export default function AccountPage() {
   const [redeemCode, setRedeemCode] = useState("");
   const [walletConfirm, setWalletConfirm] = useState<WalletConfirmValue | null>(null);
   const [replacePending, setReplacePending] = useState(false);
+  const [vaultLockNotice, setVaultLockNotice] = useState<string | null>(null);
+
+  // Logout, account change and detected expiry lock the local Vault in every
+  // tab (R55, P08-02). The watcher holds no Vault code; it lazy-loads it.
+  const vaultWatcherRef = useRef<VaultSessionEndWatcher | null>(null);
+  if (vaultWatcherRef.current === null) {
+    vaultWatcherRef.current = new VaultSessionEndWatcher({
+      onStatus: (status) => setVaultLockNotice(vaultLockNeedsAttention(status) ? VAULT_LOCK_ATTENTION_NOTICE : null),
+    });
+  }
 
   const controllerRef = useRef<AccountFlowController | null>(null);
   const confirmationRef = useRef<PendingConfirmation<WalletConfirmValue> | null>(null);
@@ -107,6 +123,7 @@ export default function AccountPage() {
       setWalletConfirm(null);
     }
     identityRef.current = nextIdentity;
+    void vaultWatcherRef.current?.observe(nextIdentity);
     setState(next);
   }, []);
 
@@ -192,6 +209,7 @@ export default function AccountPage() {
     window.addEventListener("pagehide", onPageHide);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("popstate", onHide);
+    vaultWatcherRef.current?.resume();
     void refreshSession();
     return () => {
       window.removeEventListener("pagehide", onPageHide);
@@ -199,6 +217,8 @@ export default function AccountPage() {
       window.removeEventListener("popstate", onHide);
       cancelPasskeyCeremony();
       clearRecovery();
+      // Unmount is not a session end: stop observing before the local reset.
+      vaultWatcherRef.current?.dispose();
       controllerRef.current?.reset();
     };
   }, [enabled, clearRecovery, refreshSession]);
@@ -524,9 +544,11 @@ export default function AccountPage() {
     setReplacePending(false);
     setBusy(true);
     setNotice(null);
+    let sent = false;
     try {
       await controller.mutate(async ({ csrfToken, signal }) => {
         operationSignal = signal;
+        sent = true;
         await requestAccount({
           path: ACCOUNT_API_PATHS.logout,
           method: "POST",
@@ -537,6 +559,9 @@ export default function AccountPage() {
           signal,
         });
       }, { accountBound: bound });
+      // Lock every tab's Vault before this page resets to the guest view. The
+      // lock is bounded in time and never rejects, so it cannot block logout.
+      await vaultWatcherRef.current?.logout("logout");
       if (isCurrent()) {
         clearRecovery();
         setNotice({ tone: "info", message: "Signed out.", needsFreshSession: false });
@@ -546,6 +571,12 @@ export default function AccountPage() {
         controller.reset();
       }
     } catch (error) {
+      // Once the logout request may have left the browser, treat this tab as
+      // logged out for the Vault: lock it everywhere even though the server
+      // outcome is unconfirmed (and even if this operation was superseded).
+      if (logoutFailureLocksVault(sent, error)) {
+        await vaultWatcherRef.current?.logout("logout-unconfirmed");
+      }
       if (!isCurrent()) return;
       if (error instanceof AccountApiError && error.failure.kind === "aborted") return;
       if (error instanceof AccountApiError && error.failure.kind === "account-changed") {
@@ -600,6 +631,12 @@ export default function AccountPage() {
         {notice !== null ? (
           <p className={`account-notice account-notice--${notice.tone}`} role="status" data-testid="account-notice">
             {notice.message}
+          </p>
+        ) : null}
+
+        {vaultLockNotice !== null ? (
+          <p className="account-notice account-notice--warning" role="status" data-testid="account-vault-lock-status">
+            {vaultLockNotice}
           </p>
         ) : null}
 

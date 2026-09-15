@@ -2,9 +2,13 @@ import {
   API_CLIENT_HEADER,
   API_SCHEMA_VERSION,
   AGENT_REGISTRY_EVIDENCE_PATH,
+  AGENT_REGISTRY_LIMITATIONS,
+  AGENT_REGISTRY_PROXIES,
   ARC_ERC8004,
+  ARC_ERC8004_DEPLOYMENT,
   ARC_TESTNET,
   AgentRegistryEvidenceEnvelopeSchema,
+  VALIDATION_PENDING_REASON,
   type WorkspaceRecord,
 } from "@openarc/shared";
 import { describe, expect, it, vi } from "vitest";
@@ -18,14 +22,23 @@ const owner = "0x1111111111111111111111111111111111111111";
 const wallet = "0x2222222222222222222222222222222222222222";
 const blockHash = `0x${"a".repeat(64)}`;
 const request = { network: ARC_TESTNET.caip2, agentId: "1" } as const;
+const registryCheck = (key: "identity" | "reputation" | "validation") => ({
+  proxy: AGENT_REGISTRY_PROXIES[key], pinnedImplementation: ARC_ERC8004_DEPLOYMENT.implementations[key],
+  observedImplementation: ARC_ERC8004_DEPLOYMENT.implementations[key], implementation: "match" as const,
+  pinnedOwner: ARC_ERC8004_DEPLOYMENT.proxyOwner, observedOwner: ARC_ERC8004_DEPLOYMENT.proxyOwner, owner: "match" as const,
+});
 const envelope = AgentRegistryEvidenceEnvelopeSchema.parse({ ok: true,
   meta: { schemaVersion: API_SCHEMA_VERSION, requestId: "11111111-1111-4111-8111-111111111111", buildSha: "test-sha" },
-  data: { schemaVersion: "openarc.agent-registry-evidence.v1", network: ARC_TESTNET.caip2, agentId: "1",
+  data: { schemaVersion: "openarc.agent-registry-evidence.v2", network: ARC_TESTNET.caip2, agentId: "1",
     anchor: { blockNumber: "100", blockHash, blockTimestamp: "2026-09-04T11:59:59Z",
       finality: "deterministic", confirmations: "1" },
     identity: { owner, agentWallet: wallet,
       metadata: { uri: "", kind: "none", trust: "untrusted_external_metadata", fetched: false } },
     feedback: null, validation: null,
+    deployment: { status: "verified", implementationSlot: ARC_ERC8004_DEPLOYMENT.implementationSlot,
+      sourceRevision: ARC_ERC8004_DEPLOYMENT.sourceRevision, reviewedAt: ARC_ERC8004_DEPLOYMENT.reviewedAt,
+      registries: { identity: registryCheck("identity"), reputation: registryCheck("reputation"),
+        validation: registryCheck("validation") } },
     source: { sourceId: "arc_primary_rpc", registrySourceId: "erc8004_registries", origin: ARC_TESTNET.rpcHttp,
       explorerOrigin: ARC_TESTNET.explorerOrigin, network: ARC_TESTNET.caip2,
       sourceRevision: ARC_ERC8004.sourceRevision, reviewedAt: ARC_ERC8004.reviewedAt,
@@ -33,11 +46,8 @@ const envelope = AgentRegistryEvidenceEnvelopeSchema.parse({ ok: true,
       registries: { identity: ARC_TESTNET.contracts.erc8004IdentityRegistry,
         reputation: ARC_TESTNET.contracts.erc8004ReputationRegistry,
         validation: ARC_TESTNET.contracts.erc8004ValidationRegistry },
-      observedAt: "2026-09-04T12:00:00Z", adapterVersion: "openarc.agent-registry-evidence.m05.v1" },
-    limitations: ["ERC-8004 is a draft standard; registry facts may change before finalization.",
-      "Identity ownership and metadata are registry claims, not proof of safety, quality, or control.",
-      "Feedback is one observer's claim and validation is one validator's response; neither is a universal score.",
-      "Metadata is untrusted external text and was not fetched or rendered by OpenArc."] } });
+      observedAt: "2026-09-04T12:00:00Z", adapterVersion: "openarc.agent-registry-evidence.m05.v2" },
+    limitations: [...AGENT_REGISTRY_LIMITATIONS] } });
 
 function setup() {
   let revision = 0;
@@ -91,6 +101,22 @@ describe("M05 agent registry browser flow", () => {
     await expect(requestAgentRegistryEvidence(exactRequest, new AbortController().signal, async () =>
       new Response(JSON.stringify(mismatched), { status: 200, headers: { "content-type": "application/json" } })))
       .rejects.toMatchObject({ code: "INVALID_RESPONSE", phase: "post-send" });
+  });
+
+  it("accepts an explicit pending validation but rejects a legacy getter-only response from the API", async () => {
+    const requestHash = `0x${"b".repeat(64)}`;
+    const validationRequest = { ...request, validationRequestHash: requestHash } as const;
+    const respond = (data: unknown) => async () => new Response(JSON.stringify({ ...envelope, data }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    const pending = { state: "pending_or_unobserved", requestHash, namedValidator: owner, agentId: "1", lastUpdate: "5",
+      relationship: "request_names_validator_without_observed_response", reason: VALIDATION_PENDING_REASON };
+    const result = await requestAgentRegistryEvidence(validationRequest, new AbortController().signal,
+      respond({ ...envelope.data, validation: pending }));
+    expect(result.data.validation?.state).toBe("pending_or_unobserved");
+    await expect(requestAgentRegistryEvidence(validationRequest, new AbortController().signal,
+      respond({ ...envelope.data, validation: { requestHash, validator: owner, agentId: "1", response: 0,
+        responseHash: `0x${"0".repeat(64)}`, tag: "", lastUpdate: "5", relationship: "validator_specific_response" } })))
+      .rejects.toMatchObject({ code: "INVALID_RESPONSE" });
   });
 
   it("encrypts exact disclosure before contact and atomically stores completion plus evidence", async () => {

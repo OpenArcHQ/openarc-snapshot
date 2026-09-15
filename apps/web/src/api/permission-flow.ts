@@ -15,6 +15,8 @@ export interface PermissionFlowOptions {
   save: (workspace: UnlockedWorkspace, receipts: readonly PermissionReceiptRecord[], assertActive: () => void, signal: AbortSignal) => Promise<UnlockedWorkspace>;
   request: (signal: AbortSignal) => Promise<CapabilitiesEnvelope>;
   onCommitted: (workspace: UnlockedWorkspace, outcome: PermissionReceiptRecord["outcome"]) => void;
+  /** Durable pre-egress recheck of the stored Vault revision and lock signal. */
+  verifyStored?: (workspace: UnlockedWorkspace) => Promise<void>;
   now?: () => string;
   id?: () => string;
 }
@@ -43,6 +45,10 @@ export async function runCapabilityPermissionFlow(options: PermissionFlowOptions
   let current = await options.save(options.workspace, [approved], options.assertActive, options.signal);
   options.assertActive();
   options.onCommitted(current, "approved");
+  // A peer lock/save/deletion committed in IndexedDB but not yet observed by
+  // this tab must stop the request, not only an in-memory generation change.
+  await options.verifyStored?.(current);
+  options.assertActive();
   let capabilities: CapabilitiesEnvelope;
   try { capabilities = await options.request(options.signal); }
   catch (cause) {

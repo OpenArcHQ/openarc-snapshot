@@ -932,3 +932,365 @@ test("the accepted deployment guards and denies are unchanged and never mention 
     "the accepted action deny must not change",
   );
 });
+
+/* ================================================================== *
+ * PORT-04 P04-02c: the migration-0015 payment-attempt proxy family.
+ *
+ * The grant family's successor lane. Same method: the five-route inventory,
+ * both audiences, their path prefixes and credential namespaces are DERIVED
+ * from packages/shared/src/commerce/control-payment-capabilities.ts, and the
+ * real nginx directives and Dockerfile lines are parsed (never comments).
+ * ================================================================== */
+
+const PAYMENT_FILES = {
+  registry: "packages/shared/src/commerce/control-payment-capabilities.ts",
+  business: "apps/web/nginx-payment-locations.conf",
+  capability: "apps/web/nginx-payment-capability.conf",
+  deny: "apps/web/nginx-payment-deny.conf",
+};
+
+const PAYMENT_FILES_LIST = [PAYMENT_FILES.capability, PAYMENT_FILES.business, PAYMENT_FILES.deny];
+
+const paymentRegistrySource = read(PAYMENT_FILES.registry);
+const paymentBusinessSource = read(PAYMENT_FILES.business);
+const paymentCapabilitySource = read(PAYMENT_FILES.capability);
+const paymentDenySource = read(PAYMENT_FILES.deny);
+
+function parsePaymentRegistry(source) {
+  const capabilityPath = source.match(/export const PAYMENT_CAPABILITIES_PATH\s*=\s*\n?\s*"([^"]+)"/u);
+  assert.ok(capabilityPath, "PAYMENT_CAPABILITIES_PATH must be declared");
+  const agentBase = source.match(/const PAYMENT_AGENT_BASE = "([^"]+)"/u);
+  const providerBase = source.match(/const PAYMENT_PROVIDER_BASE = "([^"]+)"/u);
+  assert.ok(agentBase && providerBase, "both frozen payment route bases must be declared");
+  const bases = { PAYMENT_AGENT_BASE: agentBase[1], PAYMENT_PROVIDER_BASE: providerBase[1] };
+  const entry =
+    /\{\s*id:\s*"([a-z0-9_]+)",\s*family:\s*"([a-z_]+)",\s*audience:\s*"([a-z]+)",\s*method:\s*"([A-Z]+)",\s*path:\s*`([^`]+)`\s*\}/gu;
+  const routes = [];
+  let match;
+  while ((match = entry.exec(source)) !== null) {
+    routes.push({
+      id: match[1],
+      family: match[2],
+      audience: match[3],
+      method: match[4],
+      path: match[5].replace(/\$\{([A-Z_]+)\}/gu, (_all, name) => {
+        assert.ok(Object.hasOwn(bases, name), `unknown base ${name}`);
+        return bases[name];
+      }),
+    });
+  }
+  const block = (name) => {
+    const found = source.match(new RegExp(`${name}[\\s\\S]*?Object\\.freeze\\(\\{([\\s\\S]*?)\\}\\)`, "u"));
+    assert.ok(found, `${name} must be declared`);
+    const map = {};
+    for (const line of found[1].matchAll(/([a-z]+):\s*"([^"]+)"/gu)) map[line[1]] = line[2];
+    return map;
+  };
+  return {
+    capabilityPath: capabilityPath[1],
+    routes,
+    prefixes: block("PAYMENT_CAPABILITY_AUDIENCE_PREFIX"),
+    credentials: block("PAYMENT_CAPABILITY_CREDENTIAL"),
+  };
+}
+
+const paymentRegistry = parsePaymentRegistry(paymentRegistrySource);
+const PAYMENT_ROUTES = paymentRegistry.routes;
+const PAYMENT_PREFIX = paymentRegistry.prefixes;
+const PAYMENT_AGENT_NAMESPACE = paymentRegistry.credentials.agent?.match(/^([a-z0-9]+_v1_)/u)?.[1];
+
+const PAYMENT_IDS = Object.freeze({
+  ":organizationId": "openarc:org:11111111-1111-4111-8111-111111111111",
+  ":listingId": "openarc:listing:44444444-4444-4444-8444-444444444444",
+  ":version": "7",
+  ":attemptId": "55555555-5555-4555-8555-555555555555",
+});
+
+function paymentTargetFor(routePath) {
+  return routePath
+    .split("/")
+    .map((segment) => {
+      if (!segment.startsWith(":")) return segment;
+      assert.ok(Object.hasOwn(PAYMENT_IDS, segment), `no concrete id for ${segment}`);
+      return PAYMENT_IDS[segment];
+    })
+    .join("/");
+}
+
+const paymentLocations = parseLocations(paymentBusinessSource);
+const paymentProxying = paymentLocations.filter((entry) => !entry.path.startsWith("@") && entry.body.includes("proxy_pass"));
+const paymentAgentLocations = paymentProxying.filter((entry) => pathText(entry).startsWith(`${PAYMENT_PREFIX.agent}commerce-payment`));
+const paymentBrowserLocations = paymentProxying.filter((entry) => pathText(entry).startsWith(PAYMENT_PREFIX.browser));
+
+function selects(entry, target) {
+  return entry.modifier === "=" ? entry.path === target : entry.modifier === "~" && regexFor(entry).test(target);
+}
+
+test("payment: the frozen registry publishes exactly five routes across two disjoint audiences", () => {
+  assert.equal(paymentRegistry.capabilityPath, "/v2/public/payment-capabilities");
+  assert.deepEqual(
+    PAYMENT_ROUTES.map((route) => [route.id, route.family, route.audience, route.method]),
+    [
+      ["listing_payment_terms_record", "commerce_payment_terms", "browser", "POST"],
+      ["payment_requirement_register", "commerce_payment_attempt", "agent", "POST"],
+      ["payment_attempt_persist", "commerce_payment_attempt", "agent", "POST"],
+      ["payment_attempt_dispatch", "commerce_payment_attempt", "agent", "POST"],
+      ["payment_attempt_detail", "commerce_payment_attempt", "agent", "GET"],
+    ],
+    "the frozen payment inventory must not drift",
+  );
+  for (const route of PAYMENT_ROUTES) {
+    assert.ok(route.path.startsWith(PAYMENT_PREFIX[route.audience]), `${route.id} must live under ${PAYMENT_PREFIX[route.audience]}`);
+    assert.ok(!/observ|settle|release|refund/iu.test(route.path), `${route.id} must not be an observation or settlement route`);
+  }
+  assert.equal(paymentRegistry.credentials.browser, "browser_session_cookie");
+  assert.equal(PAYMENT_AGENT_NAMESPACE, "oacs_v1_", "the agent audience must name the commerce-session namespace");
+});
+
+test("payment: the business include declares exactly one location per frozen route with the exact method", () => {
+  assert.equal(paymentProxying.length, 5, "exactly five proxying locations");
+  assert.equal(paymentLocations.length, 5, "no extra or named location may hide in the payment include");
+  const claimed = new Set();
+  for (const route of PAYMENT_ROUTES) {
+    const target = paymentTargetFor(route.path);
+    const matches = paymentProxying.filter((entry) => selects(entry, target));
+    assert.equal(matches.length, 1, `${route.id} (${target}) must select exactly one location`);
+    assert.equal(methodOf(matches[0]), route.method, `${route.id} must pin ${route.method}`);
+    claimed.add(matches[0].raw);
+  }
+  assert.equal(claimed.size, 5);
+  assert.equal(paymentBrowserLocations.length, 1, "one browser location");
+  assert.equal(paymentAgentLocations.length, 4, "four agent locations");
+  const directives = stripNginxComments(paymentBusinessSource).replace(/#[^\n]*/gu, "");
+  assert.ok(!/observ|settle|release|refund|healthz|capabilit|grant/iu.test(directives), "no unrelated endpoint may hide in the payment include");
+  assert.ok(!/error_page\s+418|return\s+418;/u.test(directives), "no mixed-method dispatch is declared");
+});
+
+test("payment: ids use the canonical typed grammars and reject drift", () => {
+  const terms = paymentBrowserLocations[0];
+  assert.ok(terms.raw.includes(`openarc:org:${UUID_ID}`), "typed organization id");
+  assert.ok(terms.raw.includes(`openarc:listing:${UUID_ID}`), "typed listing id");
+  assert.ok(terms.raw.includes("/versions/[1-9][0-9]{0,8}/payment-terms$"), "canonical listing version");
+  const base = `${PAYMENT_PREFIX.browser}${PAYMENT_IDS[":organizationId"]}/listings/${PAYMENT_IDS[":listingId"]}/versions`;
+  assert.ok(regexFor(terms).test(`${base}/7/payment-terms`));
+  assert.ok(!regexFor(terms).test(`${base}/0/payment-terms`), "version 0 must not match");
+  assert.ok(!regexFor(terms).test(`${base}/07/payment-terms`), "a leading zero must not match");
+  assert.ok(!regexFor(terms).test(`${base}/7/payment-terms/extra`), "an extra segment must not match");
+  for (const entry of paymentAgentLocations.filter((candidate) => candidate.modifier === "~")) {
+    assert.ok(entry.raw.includes(UUID_V4), `${entry.raw} must pin the attempt id to version 4`);
+    assert.ok(!regexFor(entry).test(`${PAYMENT_PREFIX.agent}commerce-payment-attempts/55555555-5555-1555-8555-555555555555`), "a non-v4 attempt id must not match");
+  }
+  // The terms route is disjoint from the accepted listing lifecycle regexes.
+  const target = paymentTargetFor(PAYMENT_ROUTES[0].path);
+  for (const entry of parseLocations(read(FILES.listingBusiness))) {
+    if (entry.path.startsWith("@")) continue;
+    assert.ok(!selects(entry, target), `the listing-management location ${entry.raw} must not capture the terms route`);
+  }
+});
+
+test("payment: every route uses the host-only no-URI proxy_pass and rejects a literal ?", () => {
+  for (const entry of paymentProxying) {
+    assert.match(entry.body, /proxy_pass\s+https:\/\/\$\{API_UPSTREAM_HOST\};/u, `${entry.raw} must proxy with no URI part`);
+    assert.ok(!/proxy_pass\s+https:\/\/\$\{API_UPSTREAM_HOST\}\S+;/u.test(entry.body), `${entry.raw} must not append a URI`);
+    assert.ok(!/proxy_cache\b|proxy_store\b|client_max_body_size\s+0;/u.test(entry.body));
+    if (entry.modifier === "=") {
+      assert.match(entry.body, new RegExp(`if\\s*\\(\\$request_uri\\s*!=\\s*"${entry.path}"\\)\\s*\\{\\s*return\\s+400;\\s*\\}`, "u"), `${entry.raw} must reject any query`);
+    } else {
+      assert.match(entry.body, /if\s*\(\$request_uri\s*~\s*"\\\?"\)\s*\{\s*return\s+400;\s*\}/u, `${entry.raw} must reject a literal ?`);
+    }
+    const guards = entry.body.match(/\$request_method\s*!=\s*[A-Z]+/gu) ?? [];
+    assert.equal(guards.length, 1, `${entry.raw} must declare exactly one method guard`);
+  }
+  assert.ok(!/rewrite\b|\$arg_/u.test(stripNginxComments(paymentBusinessSource)));
+  for (const source of [paymentBusinessSource, paymentCapabilitySource, paymentDenySource]) {
+    for (const entry of parseLocations(source)) {
+      for (const block of entry.body.match(/if\s*\([^)]*\)\s*\{[^}]*\}/gu) ?? []) {
+        assert.ok(!/proxy_pass|proxy_set_header|include |client_max_body_size/u.test(block), "no proxy directive inside an if block");
+      }
+    }
+  }
+});
+
+test("payment: the agent routes require exactly oacs_v1_ and reject oas_ag_, oas_pr_ and every browser credential", () => {
+  assert.equal(paymentAgentLocations.length, 4);
+  for (const entry of paymentAgentLocations) {
+    const pattern = bearerPattern(entry);
+    assert.equal(pattern, `^Bearer ${PAYMENT_AGENT_NAMESPACE}[A-Za-z0-9_-]{43}$`, `${entry.raw} must pin the exact commerce-session grammar`);
+    const compiled = new RegExp(pattern, "u");
+    assert.ok(compiled.test(SAMPLE("oacs_v1_")), `${entry.raw} must ACCEPT oacs_v1_`);
+    assert.ok(!compiled.test(SAMPLE("oas_ag_")), `${entry.raw} must REJECT the oas_ag_ machine credential`);
+    assert.ok(!compiled.test(SAMPLE("oas_pr_")), `${entry.raw} must REJECT an oas_pr_ provider session`);
+    assert.ok(!compiled.test(SAMPLE("oag_v1_")), `${entry.raw} must REJECT a grant token`);
+    assert.ok(!compiled.test(`Bearer oacs_v1_${"A".repeat(42)}`), `${entry.raw} must REJECT a truncated bearer`);
+    assert.ok(!/oas_ag_|oas_pr_|oag_v1_/u.test(entry.body), `${entry.raw} must not mention another namespace`);
+    for (const header of ["$http_cookie", "$http_origin", "$http_sec_fetch_site", "$http_sec_fetch_mode", "$http_sec_fetch_dest", "$http_sec_fetch_user", "$http_x_openarc_client", "$http_x_openarc_csrf", "$http_proxy_authorization", "$http_x_openarc_proxy_secret"]) {
+      assert.match(entry.body, new RegExp(`if\\s*\\(${header.replace("$", "\\$")}\\s*!=\\s*""\\)\\s*\\{\\s*return\\s+403;\\s*\\}`, "u"), `${entry.raw} must reject ${header}`);
+    }
+    // Agent writes are keyed by their own canonical ids: an idempotency key is rejected.
+    assert.match(entry.body, /if\s*\(\$http_idempotency_key\s*!=\s*""\)\s*\{\s*return\s+400;\s*\}/u, `${entry.raw} must reject an idempotency key`);
+    assert.ok(!/proxy_set_header\s+Idempotency-Key/u.test(entry.body), `${entry.raw} must not forward an idempotency key`);
+    assert.match(entry.body, /include\s+\/etc\/nginx\/commerce_agent_proxy_params;/u);
+    assert.match(entry.body, /include\s+\/etc\/nginx\/market_response_headers;/u);
+    assert.ok(!/tenant_(write_)?proxy_params/u.test(entry.body), `${entry.raw} must not use browser params`);
+    if (methodOf(entry) === "POST") {
+      assert.match(entry.body, /if\s*\(\$http_content_type\s*!~\s*"\^application\/json/u);
+      assert.match(entry.body, /client_max_body_size\s+16k;/u);
+      assert.match(entry.body, /proxy_pass_request_body\s+on;/u);
+    } else {
+      assert.match(entry.body, /if\s*\(\$http_content_length\s*!=\s*""\)\s*\{\s*return\s+400;\s*\}/u);
+      assert.match(entry.body, /client_max_body_size\s+1k;/u);
+      assert.match(entry.body, /proxy_pass_request_body\s+off;/u);
+    }
+  }
+});
+
+test("payment: the seller terms route presents a cookie, requires CSRF and idempotency, and rejects every bearer", () => {
+  assert.equal(paymentBrowserLocations.length, 1);
+  const entry = paymentBrowserLocations[0];
+  assert.equal(methodOf(entry), "POST");
+  assert.equal(bearerPattern(entry), null, "no bearer namespace is accepted");
+  assert.match(entry.body, /if\s*\(\$http_authorization\s*!=\s*""\)\s*\{\s*return\s+403;\s*\}/u);
+  assert.match(entry.body, /if\s*\(\$http_proxy_authorization\s*!=\s*""\)\s*\{\s*return\s+403;\s*\}/u);
+  assert.match(entry.body, /if\s*\(\$http_content_type\s*!~\s*"\^application\/json/u);
+  assert.match(entry.body, /if\s*\(\$http_transfer_encoding\s*!=\s*""\)\s*\{\s*return\s+400;\s*\}/u);
+  assert.match(entry.body, /if\s*\(\$http_x_openarc_csrf\s*=\s*""\)\s*\{\s*return\s+400;\s*\}/u);
+  assert.match(entry.body, /if\s*\(\$http_idempotency_key\s*=\s*""\)\s*\{\s*return\s+400;\s*\}/u);
+  assert.match(entry.body, /client_max_body_size\s+16k;/u);
+  assert.match(entry.body, /include\s+\/etc\/nginx\/tenant_write_proxy_params;/u);
+  assert.match(entry.body, /include\s+\/etc\/nginx\/market_response_headers;/u);
+  assert.ok(!/commerce_agent_proxy_params|oacs_v1_|oas_ag_|oas_pr_/u.test(entry.body));
+  assert.ok(writeParams.includes("proxy_set_header X-OpenArc-CSRF $http_x_openarc_csrf;"));
+  assert.ok(writeParams.includes("proxy_set_header Idempotency-Key $http_idempotency_key;"));
+  for (const source of [writeParams, agentParams, responseHeaders]) {
+    assert.ok(!/payment/u.test(source), "the reused param files gain no payment edit");
+  }
+});
+
+test("payment: the capability route is an exact credentialless GET and no conf embeds a secret", () => {
+  const capability = parseLocations(paymentCapabilitySource);
+  assert.equal(capability.length, 1);
+  const entry = capability[0];
+  assert.equal(entry.modifier, "=");
+  assert.equal(entry.path, paymentRegistry.capabilityPath);
+  assert.match(entry.body, /if\s*\(\$request_method\s*!=\s*GET\)\s*\{\s*return\s+405;\s*\}/u);
+  assert.match(entry.body, new RegExp(`if\\s*\\(\\$request_uri\\s*!=\\s*"${entry.path}"\\)\\s*\\{\\s*return\\s+400;\\s*\\}`, "u"));
+  for (const header of ["$http_cookie", "$http_authorization", "$http_proxy_authorization", "$http_x_openarc_csrf", "$http_idempotency_key", "$http_x_openarc_proxy_secret"]) {
+    assert.match(entry.body, new RegExp(`if\\s*\\(${header.replace("$", "\\$")}\\s*!=\\s*""\\)\\s*\\{\\s*return\\s+403;\\s*\\}`, "u"));
+  }
+  assert.match(entry.body, /proxy_pass_request_headers\s+off;/u);
+  assert.match(entry.body, /proxy_pass_request_body\s+off;/u);
+  assert.match(entry.body, new RegExp(`proxy_pass\\s+https://\\$\\{API_UPSTREAM_HOST\\}${entry.path};`, "u"));
+  assert.ok(!/try_files|index\.html/u.test(entry.body));
+  for (const source of [paymentBusinessSource, paymentCapabilitySource, paymentDenySource]) {
+    assert.ok(!/SOURCE_PROXY_SECRET/u.test(source));
+    assert.ok(!/(?:oacs_v1_|oas_pr_|oas_ag_|oag_v1_)[A-Za-z0-9]{4,}/u.test(source), "no literal token");
+    assert.ok(!/Bearer\s+(?!oacs_v1_\[)[A-Za-z0-9._-]{8,}/u.test(source), "no literal bearer");
+  }
+});
+
+test("payment: the deny include uses plain prefixes, covers lookalikes and shadows no accepted family", () => {
+  const deny = parseLocations(paymentDenySource);
+  assert.deepEqual(
+    deny.map((entry) => `${entry.modifier}|${entry.path}`).sort(),
+    ["|/v2/agent/commerce-payment-attempts", "|/v2/agent/commerce-payment-requirements", "|/v2/public/payment-capabilities"],
+    "exactly three plain payment denies",
+  );
+  for (const entry of deny) {
+    assert.match(entry.body.trim(), /^return 404;$/u);
+  }
+  for (const lookalike of [
+    "/v2/public/payment-capabilitiesXYZ",
+    "/v2/agent/commerce-payment-requirementsXYZ",
+    "/v2/agent/commerce-payment-requirements/extra",
+    "/v2/agent/commerce-payment-attemptsXYZ",
+    "/v2/agent/commerce-payment-attempts/not-an-id",
+    "/v2/agent/commerce-payment-attempts/55555555-5555-4555-8555-555555555555/observe",
+  ]) {
+    assert.ok(deny.some((entry) => lookalike.startsWith(entry.path)), `${lookalike} must be covered by a plain prefix`);
+  }
+  for (const accepted of [
+    "/v2/agent/commerce-sessions/exchange",
+    "/v2/agent/commerce-actions",
+    "/v2/agent/commerce-grants",
+    "/v2/provider/organizations/openarc:org:11111111-1111-4111-8111-111111111111/listings",
+  ]) {
+    assert.ok(!deny.some((entry) => accepted.startsWith(entry.path)), `${accepted} must not be captured by a payment deny`);
+  }
+  // The seller terms root is owned by the accepted market deny, not restated.
+  assert.match(read(FILES.marketDeny), /location \/v2\/provider \{ return 404; \}/u);
+  // Enabled exact and anchored routes still beat the deny prefixes.
+  assert.ok(paymentProxying.some((entry) => entry.modifier === "=" && entry.path === "/v2/agent/commerce-payment-attempts"));
+  assert.ok(paymentProxying.some((entry) => entry.modifier === "~" && pathText(entry).startsWith("/v2/agent/commerce-payment-attempts/")));
+  // No accepted business include selects a payment target.
+  for (const file of [FILES.sessionBusiness, FILES.actionBusiness, FILES.business]) {
+    for (const entry of parseLocations(read(file)).filter((candidate) => !candidate.path.startsWith("@"))) {
+      for (const route of PAYMENT_ROUTES.slice(1)) {
+        assert.ok(!selects(entry, paymentTargetFor(route.path)), `${file} ${entry.raw} must not capture ${route.id}`);
+      }
+    }
+  }
+});
+
+test("payment: both API templates install capability, business and deny once, before the namespace guards", () => {
+  for (const template of [FILES.apiConf, FILES.arcConf]) {
+    const source = read(template);
+    for (const include of ["openarc-payment-capability-locations.inc", "openarc-commerce-payment-locations.inc", "openarc-payment-deny.inc"]) {
+      assert.equal(source.split(include).length - 1, 1, `${template} must include ${include} exactly once`);
+      assert.ok(source.indexOf(include) > source.indexOf("openarc-grant-deny.inc"), `${include} must follow the grant family`);
+      assert.ok(source.indexOf(include) < source.indexOf("location = /v1 { return 404; }"), `${include} must precede the namespace guards`);
+      assert.ok(source.indexOf(include) < source.indexOf("location / { try_files"), `${include} must precede the SPA fallback`);
+    }
+  }
+  assert.ok(!paymentBusinessSource.includes(paymentRegistry.capabilityPath));
+  assert.ok(!/commerce-payment|payment-terms/u.test(paymentCapabilitySource));
+});
+
+test("payment: the plain no-API template denies every payment path without duplicates or proxying", () => {
+  const plainSource = read(FILES.plainConf);
+  const plainLocations = parseLocations(plainSource);
+  for (const required of ["/v2/public/payment-capabilities", "/v2/agent/commerce-payment-requirements", "/v2/agent/commerce-payment-attempts", "/v2/provider"]) {
+    const entry = plainLocations.find((candidate) => candidate.path === required && candidate.modifier === "");
+    assert.ok(entry, `${required} must be a plain deny in the no-API template`);
+    assert.match(entry.body.trim(), /^return 404;$/u);
+  }
+  assert.ok(!plainSource.includes("openarc-commerce-payment-locations"));
+  assert.ok(!stripNginxComments(plainSource).includes("API_UPSTREAM_HOST"));
+  const paths = plainLocations.map((entry) => `${entry.modifier}|${entry.path}`);
+  assert.equal(new Set(paths).size, paths.length, "no duplicate location");
+});
+
+test("payment: Dockerfile defaults the flag off in both stages and requires the grant and action chain", () => {
+  assert.equal((dockerfile.match(/ARG\s+VITE_COMMERCE_PAYMENTS_ENABLED=false/gu) ?? []).length, 2, "default false in both stages");
+  assert.ok(!/ARG\s+VITE_COMMERCE_PAYMENTS_ENABLED=true/u.test(dockerfile));
+  assert.equal((dockerfile.match(/case\s+"\$\{VITE_COMMERCE_PAYMENTS_ENABLED\}"\s+in\s+true\|false\)/gu) ?? []).length, 2);
+  const dependency =
+    'if [ "${VITE_COMMERCE_PAYMENTS_ENABLED}" = "true" ] && { ' +
+    '[ "${VITE_COMMERCE_GRANTS_ENABLED}" != "true" ] || ' +
+    '[ "${VITE_COMMERCE_ACTIONS_ENABLED}" != "true" ] || ' +
+    '[ "${VITE_COMMERCE_SESSIONS_ENABLED}" != "true" ] || ' +
+    '[ "${VITE_TENANT_READS_ENABLED}" != "true" ] || ' +
+    '[ "${VITE_ACCOUNT_ACCESS_ENABLED}" != "true" ] || ' +
+    '[ "${VITE_API_BOUNDARY_ENABLED}" != "true" ]; }';
+  assert.equal(dockerfile.split(dependency).length - 1, 2, "the full dependency chain in both stages");
+  assert.equal(dockerfile.split("\n").filter((line) => line.includes("VITE_COMMERCE_PAYMENTS_ENABLED=true requires VITE_COMMERCE_GRANTS_ENABLED=true, VITE_COMMERCE_ACTIONS_ENABLED=true")).length, 2);
+});
+
+test("payment: Dockerfile installs capability/deny unconditionally in the API branch and the business include conditionally", () => {
+  for (const file of PAYMENT_FILES_LIST) {
+    assert.equal(dockerfile.split(file).length - 1, 1, `Dockerfile must copy ${file} exactly once`);
+  }
+  const capabilityCp = dockerfile.indexOf("cp /tmp/openarc-nginx/nginx-payment-capability.conf /etc/nginx/templates/openarc-payment-capability-locations.inc.template;");
+  const denyCp = dockerfile.indexOf("cp /tmp/openarc-nginx/nginx-payment-deny.conf /etc/nginx/templates/openarc-payment-deny.inc.template;");
+  const branch = dockerfile.indexOf('if [ "${VITE_COMMERCE_PAYMENTS_ENABLED}" = "true" ]; then');
+  const apiBranch = dockerfile.indexOf('if [ "${VITE_API_BOUNDARY_ENABLED}" = "true" ]; then');
+  assert.ok(capabilityCp !== -1 && denyCp !== -1 && branch !== -1 && apiBranch !== -1);
+  assert.ok(apiBranch < capabilityCp && capabilityCp < branch && denyCp < branch, "capability/deny are unconditional inside the API branch");
+  assert.equal((dockerfile.match(/if \[ "\$\{VITE_COMMERCE_PAYMENTS_ENABLED\}" = "true" \]; then/gu) ?? []).length, 1);
+  const end = dockerfile.indexOf("cp /tmp/openarc-nginx/nginx-market-capability.conf");
+  assert.ok(end > branch);
+  const arm = dockerfile.slice(branch, end);
+  assert.equal(arm.split("openarc-commerce-payment-locations.inc.template").length - 1, 2, "both arms write the same runtime include path");
+  assert.match(arm, /:\s*>\s*\/etc\/nginx\/templates\/openarc-commerce-payment-locations\.inc\.template;/u);
+  assert.match(arm, /cp \/tmp\/openarc-nginx\/tenant_write_proxy_params \/etc\/nginx\/tenant_write_proxy_params;/u);
+  assert.match(arm, /cp \/tmp\/openarc-nginx\/commerce_agent_proxy_params \/etc\/nginx\/commerce_agent_proxy_params;/u);
+});

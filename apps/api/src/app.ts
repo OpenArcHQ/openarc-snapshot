@@ -18,6 +18,7 @@ import {
   SESSION_CAPABILITIES_PATH,
   ACTION_CAPABILITIES_PATH,
   GRANT_CAPABILITIES_PATH,
+  PAYMENT_CAPABILITIES_PATH,
 } from "@openarc/shared";
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
@@ -52,6 +53,7 @@ import { registerControlCapabilities } from "./commerce/control-capabilities.js"
 import { registerSessionCapabilities } from "./commerce/session-capabilities.js";
 import { registerActionCapabilities } from "./commerce/action-capabilities.js";
 import { registerGrantCapabilities } from "./commerce/grant-capabilities.js";
+import { registerPaymentCapabilities } from "./commerce/payment-capabilities.js";
 import { registerPolicyRoutes, CONTROL_ROUTE_PREFIX } from "./control/routes.js";
 import type { PolicyService } from "./control/service.js";
 import { registerCommerceSessionRoutes } from "./control/session-routes.js";
@@ -60,6 +62,8 @@ import { registerCommerceActionRoutes } from "./control/action-routes.js";
 import type { CommerceActionService } from "./control/action-service.js";
 import { registerCommerceGrantRoutes } from "./control/grant-routes.js";
 import type { CommerceGrantService } from "./control/grant-service.js";
+import { registerCommercePaymentRoutes } from "./control/payment-routes.js";
+import type { CommercePaymentService } from "./control/payment-service.js";
 import { ApiBoundaryError, apiErrorEnvelope, normalizeApiError } from "./http/errors.js";
 import { verifyBrowserOrigin, verifyPreflight } from "./http/origin.js";
 import { registerSourceRoute } from "./http/source-route.js";
@@ -110,6 +114,8 @@ export interface CreateAppOptions {
   commerceActionReady?: () => Promise<boolean>;
   commerceGrantService?: CommerceGrantService;
   commerceGrantReady?: () => Promise<boolean>;
+  commercePaymentService?: CommercePaymentService;
+  commercePaymentReady?: () => Promise<boolean>;
 }
 
 const disabledPaths = [
@@ -255,6 +261,20 @@ function isCommerceGrantHeadlessPath(path: string): boolean {
   );
 }
 
+/**
+ * Exact bounded AGENT roots of the migration-0015 payment surface. The seller
+ * terms route lives under the marketplace provider root and is already
+ * classified there; only the agent targets need their own exact match.
+ */
+function isCommercePaymentAgentPath(path: string): boolean {
+  return (
+    path === "/v2/agent/commerce-payment-requirements" ||
+    path.startsWith("/v2/agent/commerce-payment-requirements/") ||
+    path === "/v2/agent/commerce-payment-attempts" ||
+    path.startsWith("/v2/agent/commerce-payment-attempts/")
+  );
+}
+
 /** Any exact protected commerce-session family root (browser or agent). */
 function isCommerceSessionFamilyPath(path: string): boolean {
   return isControlFamilyPath(path) || isCommerceSessionAgentPath(path);
@@ -289,6 +309,8 @@ function routeClass(url: string): RouteClass {
   // The agent and provider authorization-grant routes also map to the EXISTING
   // coarse `tenant` metrics label; no new route class or raw path is introduced.
   if (isCommerceGrantHeadlessPath(path)) return "tenant";
+  // The agent payment routes map to the EXISTING coarse `tenant` label too.
+  if (isCommercePaymentAgentPath(path)) return "tenant";
   if (path === CAPABILITIES_PATH) return "capabilities";
   if (path === COMMERCE_CAPABILITIES_PATH) return "capabilities";
   if (path === MARKETPLACE_CAPABILITIES_PATH) return "capabilities";
@@ -296,6 +318,7 @@ function routeClass(url: string): RouteClass {
   if (path === SESSION_CAPABILITIES_PATH) return "capabilities";
   if (path === ACTION_CAPABILITIES_PATH) return "capabilities";
   if (path === GRANT_CAPABILITIES_PATH) return "capabilities";
+  if (path === PAYMENT_CAPABILITIES_PATH) return "capabilities";
   if (path === ARC_ACCOUNT_SNAPSHOT_PATH) return "arc_account";
   if (path === ARC_TRANSACTION_EVIDENCE_PATH) return "arc_transaction";
   if (path === AGENT_REGISTRY_EVIDENCE_PATH) return "agent_registry";
@@ -314,7 +337,8 @@ export function createApp({ config, logger = config.NODE_ENV !== "test", logSink
   policyManagementService, policyReady,
   commerceSessionService, commerceSessionReady,
   commerceActionService, commerceActionReady,
-  commerceGrantService, commerceGrantReady }: CreateAppOptions): FastifyInstance {
+  commerceGrantService, commerceGrantReady,
+  commercePaymentService, commercePaymentReady }: CreateAppOptions): FastifyInstance {
   // Framework request/error logging is disabled, including parser failures.
   // `frameworkErrors` receives errors raised before the normal request
   // lifecycle (notably `FST_ERR_BAD_URL` from the router) which otherwise
@@ -381,11 +405,13 @@ export function createApp({ config, logger = config.NODE_ENV !== "test", logSink
       rawPath === CONTROL_CAPABILITIES_PATH ||
       rawPath === SESSION_CAPABILITIES_PATH ||
       rawPath === ACTION_CAPABILITIES_PATH ||
-      rawPath === GRANT_CAPABILITIES_PATH;
+      rawPath === GRANT_CAPABILITIES_PATH ||
+      rawPath === PAYMENT_CAPABILITIES_PATH;
     const controlSurface = isControlFamilyPath(rawPath);
     const commerceSessionAgentSurface = isCommerceSessionAgentPath(rawPath);
     const commerceActionAgentSurface = isCommerceActionAgentPath(rawPath);
     const commerceGrantHeadlessSurface = isCommerceGrantHeadlessPath(rawPath);
+    const commercePaymentAgentSurface = isCommercePaymentAgentPath(rawPath);
     const v2Surface =
       rawPath.startsWith("/v2/auth/") ||
       isTenantFamilyPath(rawPath) ||
@@ -394,6 +420,7 @@ export function createApp({ config, logger = config.NODE_ENV !== "test", logSink
       isCommerceSessionFamilyPath(rawPath) ||
       commerceActionAgentSurface ||
       commerceGrantHeadlessSurface ||
+      commercePaymentAgentSurface ||
       commerceCapabilitySurface ||
       machineSurface;
     if (
@@ -464,6 +491,19 @@ export function createApp({ config, logger = config.NODE_ENV !== "test", logSink
       // path stays on the bounded v2 surface: a fixed envelope with no raw URL
       // echo. Lookalike prefixes are deliberately not matched, so they keep
       // legacy behavior.
+      const mapped = new AuthApiError("FEATURE_DISABLED", 404, "NOT_FOUND");
+      failures.set(request, mapped.metricsCode);
+      return reply
+        .code(mapped.status)
+        .send(authErrorEnvelope(mapped, request.id, config.COMMIT_SHA));
+    }
+    if (
+      commercePaymentAgentSurface &&
+      cause instanceof ApiBoundaryError &&
+      cause.code === "NOT_FOUND"
+    ) {
+      // An unknown or disabled agent payment path stays on the bounded v2
+      // surface: a fixed envelope with no raw URL echo.
       const mapped = new AuthApiError("FEATURE_DISABLED", 404, "NOT_FOUND");
       failures.set(request, mapped.metricsCode);
       return reply
@@ -543,6 +583,9 @@ export function createApp({ config, logger = config.NODE_ENV !== "test", logSink
   // the gate is off `commerceGrantDatabase` is ABSENT from every readiness
   // payload and the callback is never invoked.
   const grantEnabled = config.COMMERCE_GRANTS_ENABLED;
+  // Same discipline for the payment family: `commercePaymentDatabase` is ABSENT
+  // while the gate is off and the callback is never invoked.
+  const paymentEnabled = config.COMMERCE_PAYMENTS_ENABLED;
   app.get("/healthz", async () => ({ status: "ok" as const, ...build }));
   app.get("/readyz", async (_request, reply) => {
     if (config.AUTH_ENABLED) {
@@ -659,6 +702,25 @@ export function createApp({ config, logger = config.NODE_ENV !== "test", logSink
             commerceGrantDatabase: "down" }, ...build });
       }
     }
+    if (paymentEnabled) {
+      const paymentReadyResult = commercePaymentReady
+        ? await commercePaymentReady().catch(() => false)
+        : false;
+      if (!paymentReadyResult) {
+        return reply.code(503).send({ ok: false as const, status: "not_ready" as const,
+          checks: { configuration: "up", sourceRoutes: config.ARC_OBSERVATION_ENABLED ? "enabled" : "disabled",
+            redis: config.ARC_OBSERVATION_ENABLED ? "not_checked" : "not_required",
+            ...(config.AUTH_ENABLED ? { authDatabase: "up" as const } : {}),
+            ...(config.TENANT_READS_ENABLED ? { tenantDatabase: "up" as const } : {}),
+            ...(marketEnabled ? { marketDatabase: "up" as const } : {}),
+            ...(machineEnabled ? { machineDatabase: "up" as const } : {}),
+            ...(policyEnabled ? { policyDatabase: "up" as const } : {}),
+            ...(sessionEnabled ? { commerceSessionDatabase: "up" as const } : {}),
+            ...(actionEnabled ? { commerceActionDatabase: "up" as const } : {}),
+            ...(grantEnabled ? { commerceGrantDatabase: "up" as const } : {}),
+            commercePaymentDatabase: "down" }, ...build });
+      }
+    }
     if (config.ARC_OBSERVATION_ENABLED) {
       const redisReady = sourceBudget ? await sourceBudget.ready(AbortSignal.timeout(750)) : false;
       if (!redisReady) return reply.code(503).send({ ok: false as const, status: "not_ready" as const,
@@ -672,7 +734,8 @@ export function createApp({ config, logger = config.NODE_ENV !== "test", logSink
           ...(policyEnabled ? { policyDatabase: "up" as const } : {}),
           ...(sessionEnabled ? { commerceSessionDatabase: "up" as const } : {}),
           ...(actionEnabled ? { commerceActionDatabase: "up" as const } : {}),
-          ...(grantEnabled ? { commerceGrantDatabase: "up" as const } : {}) }, ...build };
+          ...(grantEnabled ? { commerceGrantDatabase: "up" as const } : {}),
+        ...(paymentEnabled ? { commercePaymentDatabase: "up" as const } : {}) }, ...build };
     }
     return { ok: true as const, status: "ready" as const,
       checks: { configuration: "up", sourceRoutes: "disabled", redis: "not_required",
@@ -683,7 +746,8 @@ export function createApp({ config, logger = config.NODE_ENV !== "test", logSink
         ...(policyEnabled ? { policyDatabase: "up" as const } : {}),
         ...(sessionEnabled ? { commerceSessionDatabase: "up" as const } : {}),
         ...(actionEnabled ? { commerceActionDatabase: "up" as const } : {}),
-        ...(grantEnabled ? { commerceGrantDatabase: "up" as const } : {}) }, ...build };
+        ...(grantEnabled ? { commerceGrantDatabase: "up" as const } : {}),
+        ...(paymentEnabled ? { commercePaymentDatabase: "up" as const } : {}) }, ...build };
   });
 
   if (config.AUTH_ENABLED) {
@@ -994,6 +1058,36 @@ export function createApp({ config, logger = config.NODE_ENV !== "test", logSink
     });
   }
 
+  // Five frozen migration-0015 payment routes in two strictly separated
+  // families (one seller browser terms write + four buyer agent attempt
+  // routes). DEFAULT OFF: while off the exact five targets are still installed
+  // and answer FEATURE_DISABLED before any service, store or cookie work. When
+  // enabled the family REQUIRES its service. No observation route exists.
+  if (config.COMMERCE_PAYMENTS_ENABLED) {
+    if (!commercePaymentService) {
+      throw new Error("Commerce payment dependencies are unavailable");
+    }
+    registerCommercePaymentRoutes(app, {
+      appOrigin: config.APP_ORIGIN,
+      cookieNames: authCookieNames(config.APP_ORIGIN.startsWith("https://")),
+      service: commercePaymentService,
+      buildSha: config.COMMIT_SHA,
+      enabled: true,
+      ...(tenantMaxResponseBytes !== undefined
+        ? { maxResponseBytes: tenantMaxResponseBytes }
+        : {}),
+    });
+  } else {
+    registerCommercePaymentRoutes(app, {
+      appOrigin: config.APP_ORIGIN,
+      cookieNames: authCookieNames(false),
+      // A disabled registration never invokes the service.
+      service: commercePaymentService as CommercePaymentService,
+      buildSha: config.COMMIT_SHA,
+      enabled: false,
+    });
+  }
+
   app.all(CAPABILITIES_PATH, { onRequest: async (request, reply) => {
     if (!config.API_BOUNDARY_ENABLED) throw new ApiBoundaryError("FEATURE_DISABLED");
     if (request.url.includes("?") || (request.headers["content-length"] !== undefined && request.headers["content-length"] !== "0") || request.headers["transfer-encoding"] !== undefined) {
@@ -1188,6 +1282,40 @@ export function createApp({ config, logger = config.NODE_ENV !== "test", logSink
         : {}),
       ...(commerceGrantReady !== undefined
         ? { grantReady: commerceGrantReady }
+        : {}),
+    },
+    buildSha: config.COMMIT_SHA,
+    appOrigin: config.APP_ORIGIN,
+    ...(tenantMaxResponseBytes !== undefined
+      ? { maxResponseBytes: tenantMaxResponseBytes }
+      : {}),
+  });
+
+  // Public, credentialless payment capability registry. It ALWAYS registers the
+  // frozen two-family / five-route manifest; with the gate off both families
+  // are `built_disabled` and ZERO readiness probes run. Availability is not
+  // authorization and never claims a payment was made or settled.
+  registerPaymentCapabilities(app, {
+    flags: {
+      authEnabled: config.AUTH_ENABLED,
+      commerceSessionsEnabled: config.COMMERCE_SESSIONS_ENABLED,
+      commerceActionsEnabled: config.COMMERCE_ACTIONS_ENABLED,
+      commerceGrantsEnabled: config.COMMERCE_GRANTS_ENABLED,
+      commercePaymentsEnabled: config.COMMERCE_PAYMENTS_ENABLED,
+    },
+    readiness: {
+      ...(authReady !== undefined ? { authReady } : {}),
+      ...(commerceSessionReady !== undefined
+        ? { sessionReady: commerceSessionReady }
+        : {}),
+      ...(commerceActionReady !== undefined
+        ? { actionReady: commerceActionReady }
+        : {}),
+      ...(commerceGrantReady !== undefined
+        ? { grantReady: commerceGrantReady }
+        : {}),
+      ...(commercePaymentReady !== undefined
+        ? { paymentReady: commercePaymentReady }
         : {}),
     },
     buildSha: config.COMMIT_SHA,
