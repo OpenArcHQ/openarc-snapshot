@@ -1,0 +1,5 @@
+{
+  "name": "openarc-e2e-control-production",
+  "private": true,
+  "type": "module"
+}

@@ -237,6 +237,13 @@ describe('schema4 manifest and unions', () => {
       '0005_machine_credentials',
       '0006_market',
       '0007_market_lifecycle',
+      '0008_control_policies',
+      '0009_control_sessions',
+      '0010_control_actions',
+      '0011_control_action_reads',
+      '0012_authorization_grants',
+      '0013_commerce_session_reads',
+      '0014_grant_mutation_reads',
     ]);
     const helpers = await admin.query<{ proname: string; owner: string; secdef: boolean; config: string[] }>(
       `SELECT p.proname, r.rolname AS owner, p.prosecdef AS secdef,

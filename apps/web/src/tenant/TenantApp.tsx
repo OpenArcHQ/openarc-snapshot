@@ -2,6 +2,7 @@ import {
   ARC_TESTNET,
   CommerceAgentProfileSchema,
   CommerceProviderProfileSchema,
+  type CommerceAgentProfile,
   type CommerceListingOwnerVersion,
   type CommerceHumanRole,
 } from "@openarc/shared";
@@ -21,11 +22,65 @@ import {
 } from "./tenant-controller.js";
 import { machineCredentialEnabled, tenantMutationEnabled, tenantReadsEnabled } from "./availability.js";
 import { listingManagementEnabledFromEnv } from "./listing-availability.js";
+import { policyManagementEnabledFromEnv } from "./policy-availability.js";
+import { commerceSessionsEnabledFromEnv } from "./session-availability.js";
+import { commerceActionsEnabledFromEnv } from "./action-availability.js";
+import { parseActionRoute, type ActionRoute } from "./action-routes.js";
+import {
+  ActionController,
+  initialActionControllerState,
+  renderActionState,
+  suppressStaleActionContext,
+  type ActionControllerState,
+  type ActionReadCoordinator,
+} from "./action-controller.js";
+import { ActionQueuePanel } from "./ActionQueuePanel.js";
+import { ApprovalQueuePanel } from "./ApprovalQueuePanel.js";
+import { ActionDetailPanel, ActionDecisionView } from "./ActionDetailPanel.js";
+import { ApprovalDetailPanel } from "./ApprovalDetailPanel.js";
+import { ActionExposurePanel } from "./ActionExposurePanel.js";
+import { commerceGrantsEnabledFromEnv } from "./grant-availability.js";
+import { parseGrantRoute, type GrantRoute } from "./grant-routes.js";
+import {
+  GrantController,
+  initialGrantControllerState,
+  renderGrantState,
+  suppressStaleGrantContext,
+  type GrantControllerState,
+  type GrantReadCoordinator,
+} from "./grant-controller.js";
+import { GrantLookupPanel } from "./GrantLookupPanel.js";
+import { GrantDetailPanel } from "./GrantDetailPanel.js";
+import { parseSessionRoute, type SessionRoute } from "./session-routes.js";
+import {
+  SessionController,
+  initialSessionControllerState,
+  renderSessionState,
+  suppressStaleSessionContext,
+  type SessionAgentSelection,
+  type SessionControllerState,
+  type SessionReadCoordinator,
+} from "./session-controller.js";
+import { SessionListPanel } from "./SessionListPanel.js";
+import { SessionIssuePanel, SessionMutationView } from "./SessionIssuePanel.js";
+import { SessionStatusPanel } from "./SessionStatusPanel.js";
+import { PolicyClient, readPolicyManagementCapability } from "./policy-client.js";
 import { TenantMutationPanel } from "./TenantMutationPanel.js";
 import { MachineCredentialPanel } from "./MachineCredentialPanel.js";
 import { ListingListPanel } from "./ListingListPanel.js";
 import { ListingEditorPanel, ListingLifecycleActions } from "./ListingEditorPanel.js";
 import { ListingVersionHistory } from "./ListingVersionHistory.js";
+import { PolicyListPanel } from "./PolicyListPanel.js";
+import { PolicyRevisionHistory } from "./PolicyRevisionHistory.js";
+import {
+  beginAppendFromRevision,
+  PolicyController,
+  initialPolicyControllerState,
+  renderPolicyState,
+  suppressStalePolicyContext,
+  type PolicyControllerState,
+} from "./policy-controller.js";
+import { parsePolicyRoute, type PolicyRoute } from "./policy-routes.js";
 import {
   ListingController,
   initialListingControllerState,
@@ -56,6 +111,10 @@ import {
 
 import tenantCssUrl from "./tenant.css?url";
 import listingCssUrl from "./market-listing.css?url";
+import policyCssUrl from "./control-policy.css?url";
+import sessionCssUrl from "./commerce-session.css?url";
+import actionCssUrl from "./control-action.css?url";
+import grantCssUrl from "./control-grant.css?url";
 
 /**
  * Protected organization workspace.
@@ -71,12 +130,25 @@ type AppPath =
   | "/app/agents"
   | "/app/provider"
   | "/app/provider/listings"
-  | "/app/provider/listings/new";
+  | "/app/provider/listings/new"
+  | "/app/budgets"
+  | "/app/budgets/new"
+  | "/app/sessions"
+  | "/app/sessions/new"
+  | "/app/actions"
+  | "/app/actions/approvals"
+  | "/app/actions/exposure"
+  | "/app/grants";
 
 type WorkspacePath =
   | AppPath
   | "/app"
   | { readonly kind: "listing-detail"; readonly listingId: string }
+  | { readonly kind: "policy-detail"; readonly policyId: string }
+  | { readonly kind: "session-detail"; readonly sessionId: string }
+  | { readonly kind: "action-detail"; readonly actionId: string }
+  | { readonly kind: "approval-detail"; readonly approvalId: string }
+  | { readonly kind: "grant-detail"; readonly grantId: string }
   | "unknown";
 
 function useTenantStyles(): void {
@@ -103,6 +175,61 @@ function useListingStyles(active: boolean): void {
   }, [active]);
 }
 
+/** Mounts the scoped policy stylesheet for the feature lifetime only. */
+function usePolicyStyles(active: boolean): void {
+  useEffect(() => {
+    if (!active) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = policyCssUrl;
+    link.dataset.policyStyle = "true";
+    document.head.append(link);
+    return () => link.remove();
+  }, [active]);
+}
+
+/** Mounts the scoped commerce-session stylesheet for the feature lifetime only. */
+function useSessionStyles(active: boolean): void {
+  useEffect(() => {
+    if (!active) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = sessionCssUrl;
+    link.dataset.sessionStyle = "true";
+    document.head.append(link);
+    return () => link.remove();
+  }, [active]);
+}
+
+/**
+ * Mounts the scoped control-grant stylesheet for the feature lifetime only.
+ * With the grant flag off this never runs, so the stylesheet is never fetched.
+ */
+function useGrantStyles(active: boolean): void {
+  useEffect(() => {
+    if (!active) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = grantCssUrl;
+    link.dataset.grantStyle = "true";
+    document.head.append(link);
+    return () => link.remove();
+  }, [active]);
+}
+
+/** Mounts the scoped control-action stylesheet for the feature lifetime only. */
+function useActionStyles(active: boolean): void {
+  useEffect(() => {
+    if (!active) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = actionCssUrl;
+    link.dataset.actionStyle = "true";
+    document.head.append(link);
+    return () => link.remove();
+  }, [active]);
+}
+
 function currentPath(): WorkspacePath {
   if (typeof window === "undefined") return "/app";
   const raw = window.location.pathname.replace(/\/+$/u, "") || "/";
@@ -116,6 +243,40 @@ function currentPath(): WorkspacePath {
     if (listing.kind === "roots") return "/app/provider/listings";
     if (listing.kind === "new") return "/app/provider/listings/new";
     if (listing.kind === "detail") return { kind: "listing-detail", listingId: listing.listingId };
+  }
+  if (raw === "/app/budgets") return "/app/budgets";
+  if (raw === "/app/budgets/new") return "/app/budgets/new";
+  if (raw.startsWith("/app/budgets/")) {
+    const policy = parsePolicyRoute(raw);
+    if (policy === null) return "unknown";
+    if (policy.kind === "detail") return { kind: "policy-detail", policyId: policy.policyId };
+  }
+  if (raw.startsWith("/app/sessions")) {
+    const session = parseSessionRoute(raw);
+    if (session === null) return "unknown";
+    if (session.kind === "roots") return "/app/sessions";
+    if (session.kind === "new") return "/app/sessions/new";
+    if (session.kind === "detail") return { kind: "session-detail", sessionId: session.sessionId };
+    return "unknown";
+  }
+  if (raw.startsWith("/app/actions")) {
+    const action = parseActionRoute(raw);
+    if (action === null) return "unknown";
+    if (action.kind === "queue") return "/app/actions";
+    if (action.kind === "approvals") return "/app/actions/approvals";
+    if (action.kind === "exposure") return "/app/actions/exposure";
+    if (action.kind === "detail") return { kind: "action-detail", actionId: action.actionId };
+    if (action.kind === "approval-detail") {
+      return { kind: "approval-detail", approvalId: action.approvalId };
+    }
+    return "unknown";
+  }
+  if (raw.startsWith("/app/grants")) {
+    const grant = parseGrantRoute(raw);
+    if (grant === null) return "unknown";
+    if (grant.kind === "lookup") return "/app/grants";
+    if (grant.kind === "detail") return { kind: "grant-detail", grantId: grant.grantId };
+    return "unknown";
   }
   if (raw.startsWith("/app/")) return "unknown";
   return "unknown";
@@ -138,6 +299,65 @@ function listingRouteOf(path: WorkspacePath): ListingRoute | null {
 
 function isListingWorkspacePath(path: WorkspacePath): boolean {
   return listingRouteOf(path) !== null;
+}
+
+/** The route object for a policy workspace path, or null when not policy. */
+function policyRouteOf(path: WorkspacePath): PolicyRoute | null {
+  if (path === "/app/budgets") return { kind: "roots" };
+  if (path === "/app/budgets/new") return { kind: "new" };
+  if (typeof path === "object" && path.kind === "policy-detail") {
+    return { kind: "detail", policyId: path.policyId };
+  }
+  return null;
+}
+
+function isPolicyWorkspacePath(path: WorkspacePath): boolean {
+  return policyRouteOf(path) !== null;
+}
+
+/** The route object for a session workspace path, or null when not session. */
+function sessionRouteOf(path: WorkspacePath): SessionRoute | null {
+  if (path === "/app/sessions") return { kind: "roots" };
+  if (path === "/app/sessions/new") return { kind: "new" };
+  if (typeof path === "object" && path.kind === "session-detail") {
+    return { kind: "detail", sessionId: path.sessionId };
+  }
+  return null;
+}
+
+function isSessionWorkspacePath(path: WorkspacePath): boolean {
+  return sessionRouteOf(path) !== null;
+}
+
+/** The route object for an action workspace path, or null when not action. */
+function actionRouteOf(path: WorkspacePath): ActionRoute | null {
+  if (path === "/app/actions") return { kind: "queue" };
+  if (path === "/app/actions/approvals") return { kind: "approvals" };
+  if (path === "/app/actions/exposure") return { kind: "exposure" };
+  if (typeof path === "object" && path.kind === "action-detail") {
+    return { kind: "detail", actionId: path.actionId };
+  }
+  if (typeof path === "object" && path.kind === "approval-detail") {
+    return { kind: "approval-detail", approvalId: path.approvalId };
+  }
+  return null;
+}
+
+function isActionWorkspacePath(path: WorkspacePath): boolean {
+  return actionRouteOf(path) !== null;
+}
+
+/** The route object for a grant workspace path, or null when not a grant. */
+function grantRouteOf(path: WorkspacePath): GrantRoute | null {
+  if (path === "/app/grants") return { kind: "lookup" };
+  if (typeof path === "object" && path.kind === "grant-detail") {
+    return { kind: "detail", grantId: path.grantId };
+  }
+  return null;
+}
+
+function isGrantWorkspacePath(path: WorkspacePath): boolean {
+  return grantRouteOf(path) !== null;
 }
 
 export default function TenantApp() {
@@ -164,6 +384,27 @@ export default function TenantApp() {
   // The listing surface is independent of the write and machine flags: it has
   // its own server authority and its own capability probe. All defaults false.
   const listingEnabled = useMemo(() => listingManagementEnabledFromEnv(), []);
+  // The policy surface is independent of tenant writes, machine, listing,
+  // Vault, wallet and session flags: it has its own server authority and its
+  // own credentialless capability probe. All defaults false.
+  const policyEnabled = useMemo(() => policyManagementEnabledFromEnv(), []);
+  // The commerce-session surface is independent of tenant writes, machine,
+  // listing, policy, Vault, wallet and market flags: it has its own server
+  // authority and its own separate PUBLIC credentialless capability probe. All
+  // defaults false, so a disabled deployment makes ZERO session requests.
+  const sessionsEnabled = useMemo(() => commerceSessionsEnabledFromEnv(), []);
+  // The commerce action/approval console is independent of tenant writes,
+  // machine, listing, policy, session, Vault, wallet and market flags: it has
+  // its own server authority and its own separate PUBLIC credentialless
+  // capability probe. All defaults false, so a disabled deployment makes ZERO
+  // action requests.
+  const actionsEnabled = useMemo(() => commerceActionsEnabledFromEnv(), []);
+  // The authorization-grant console is a strict superset of the commerce-action
+  // and commerce-session consoles and has its own server authority plus its own
+  // separate PUBLIC credentialless capability probe. It defaults to false, so a
+  // disabled deployment constructs no grant controller, no grant client and no
+  // stylesheet, and makes ZERO grant requests — the capability probe included.
+  const grantsEnabled = useMemo(() => commerceGrantsEnabledFromEnv(), []);
   const [state, setState] = useState<TenantViewControllerState>(initialTenantState);
   const [mutationState, setMutationState] = useState<TenantMutationState>(initialTenantMutationState);
   const [machineState, setMachineState] = useState<MachineConsoleState>(initialMachineConsoleState);
@@ -172,6 +413,36 @@ export default function TenantApp() {
   const [listingCreating, setListingCreating] = useState(false);
   const [listingProviderId, setListingProviderId] = useState<string | null>(null);
   const [listingBaseVersion, setListingBaseVersion] = useState<CommerceListingOwnerVersion | null>(null);
+  const [policyState, setPolicyState] = useState<PolicyControllerState>(initialPolicyControllerState);
+  const [policyCreating, setPolicyCreating] = useState(false);
+  const [sessionState, setSessionState] = useState<SessionControllerState>(initialSessionControllerState);
+  const [sessionSelectedAgent, setSessionSelectedAgent] = useState<string | null>(null);
+  const [sessionPolicyOptions, setSessionPolicyOptions] = useState<readonly { policyId: string; status: string }[]>([]);
+  const [sessionPolicyStatus, setSessionPolicyStatus] = useState<"none" | "loading" | "ready" | "error">("none");
+  const [sessionPolicyNext, setSessionPolicyNext] = useState<string | null>(null);
+  const sessionPolicyControllerRef = useRef<AbortController | null>(null);
+  const sessionPolicyGenerationRef = useRef(0);
+  // A monotonic generation that forces the policy create editor to REMOUNT
+  // (and therefore reinitialize every useState field) on an external privacy
+  // boundary: hidden/pagehide. Account/organization/role changes are already
+  // part of the editor key below, so they remount synchronously in the same
+  // render the context changes. The generation is committed inside the same
+  // flushSync as the controller clear, so no previous form frame is painted.
+  const [policyFormGeneration, setPolicyFormGeneration] = useState(0);
+  // Monotonic privacy generation that remounts the session form/secret subtree
+  // on an external hidden/pagehide boundary, committed inside the same
+  // flushSync as the controller clear so no previous form frame is painted.
+  const [sessionFormGeneration, setSessionFormGeneration] = useState(0);
+  const [actionState, setActionState] = useState<ActionControllerState>(initialActionControllerState);
+  // Monotonic privacy generation that remounts the exposure form subtree on an
+  // external hidden/pagehide boundary, committed inside the same flushSync as
+  // the controller clear so no previous form frame is painted.
+  const [actionFormGeneration, setActionFormGeneration] = useState(0);
+  const [grantState, setGrantState] = useState<GrantControllerState>(initialGrantControllerState);
+  // Monotonic privacy generation that remounts the grant lookup form subtree on
+  // an external hidden/pagehide boundary, committed inside the same flushSync as
+  // the controller clear so no previous form frame is painted.
+  const [grantFormGeneration, setGrantFormGeneration] = useState(0);
   const [selectedProfile, setSelectedProfile] = useState<MachineCredentialTarget | null>(null);
   const [path, setPath] = useState<WorkspacePath>(currentPath);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -183,14 +454,47 @@ export default function TenantApp() {
   const writeControllerRef = useRef<TenantWriteController | null>(null);
   const machineControllerRef = useRef<MachineCredentialController | null>(null);
   const listingControllerRef = useRef<ListingController | null>(null);
+  const policyControllerRef = useRef<PolicyController | null>(null);
+  const sessionControllerRef = useRef<SessionController | null>(null);
+  const actionControllerRef = useRef<ActionController | null>(null);
+  const grantControllerRef = useRef<GrantController | null>(null);
+  const sessionSelectedAgentRef = useRef<string | null>(null);
   const boundMachineContextRef = useRef<MachineRenderContext | null>(null);
   const boundListingContextRef = useRef<{ accountId: string; organizationId: string; role: string | null } | null>(null);
+  const boundPolicyContextRef = useRef<{ accountId: string; organizationId: string; role: string | null } | null>(null);
+  const boundSessionContextRef = useRef<{ accountId: string; organizationId: string; role: string | null } | null>(null);
+  const boundActionContextRef = useRef<{ accountId: string; organizationId: string; role: string | null } | null>(null);
+  const boundGrantContextRef = useRef<{ accountId: string; organizationId: string; role: string | null } | null>(null);
   const listingOpenRef = useRef<((listingId: string) => void) | null>(null);
+  const policyOpenRef = useRef<((policyId: string) => void) | null>(null);
   const accountRef = useRef<AccountFlowController | null>(null);
   const known = isKnownPath(path);
 
+  // Aborts any in-flight optional policy-picker page and clears its bounded
+  // options. Safe to call on any privacy/context boundary; it makes no request.
+  const invalidateSessionPolicies = useCallback(() => {
+    sessionPolicyGenerationRef.current += 1;
+    sessionPolicyControllerRef.current?.abort();
+    sessionPolicyControllerRef.current = null;
+    setSessionPolicyOptions([]);
+    setSessionPolicyStatus("none");
+    setSessionPolicyNext(null);
+  }, []);
+
+  // The effective selected agent mirrors the issue panel: an explicit selection
+  // or the first active agent of the current organization. The picker load and
+  // the controller both bind to exactly this agent.
+  const firstActiveAgentId =
+    state.agents.items.find((item) => item.status === "active")?.agentId ?? null;
+  const sessionEffectiveAgentId = sessionSelectedAgent ?? firstActiveAgentId;
+  const accountId = state.principal.accountId;
+
   useTenantStyles();
   useListingStyles(listingEnabled);
+  usePolicyStyles(policyEnabled);
+  useSessionStyles(sessionsEnabled);
+  useActionStyles(actionsEnabled);
+  useGrantStyles(grantsEnabled);
 
   useEffect(() => {
     const onPopState = () => setPath(currentPath());
@@ -266,6 +570,118 @@ export default function TenantApp() {
         })
       : null;
     listingControllerRef.current = listingController;
+    // The policy controller is constructed ONLY when its own flag and all its
+    // prerequisites are enabled. It mounts no request until a protected policy
+    // route initializes the independent credentialless capability gate, and it
+    // never depends on the tenant-write, machine, listing, Vault, wallet or
+    // session flags. With it off, ZERO policy/capability requests are made.
+    const policyController = policyEnabled
+      ? new PolicyController({
+          account,
+          reads: {
+            currentOrganizationId: () => controller.currentOrganizationId(),
+            currentRole: () => controller.currentRole(),
+            currentAccountId: () =>
+              account.state.session.signedIn ? account.state.session.accountId : null,
+            abortPendingReads: () => controller.abortPendingReads(),
+            reloadAfterCommit: async () => {
+              // Policy revisions are independent of the tenant read sections.
+              // A context reload here would transiently clear the authoritative
+              // role and erase the just-committed receipt, so the controller
+              // reloads its own bounded policy page after the commit instead.
+            },
+          },
+          onState: setPolicyState,
+          onCommittedPolicy: (policyId) => policyOpenRef.current?.(policyId),
+        })
+      : null;
+    policyControllerRef.current = policyController;
+    // The commerce-session controller is constructed ONLY when its own flag and
+    // all prerequisites are enabled. It mounts no request until a protected
+    // session route initializes the independent public credentialless capability
+    // gate, and it never depends on tenant-write, machine, listing, policy,
+    // Vault, wallet or market flags. With it off, ZERO session/capability
+    // requests are made. It never puts a machine bearer or commerce-session
+    // token into this browser.
+    const sessionReads: SessionReadCoordinator = {
+      currentOrganizationId: () => controller.currentOrganizationId(),
+      currentRole: () => controller.currentRole(),
+      currentAccountId: () =>
+        account.state.session.signedIn ? account.state.session.accountId : null,
+      abortPendingReads: () => controller.abortPendingReads(),
+      selectedActiveAgent: (): SessionAgentSelection | null => {
+        const selectedId = sessionSelectedAgentRef.current;
+        const items = controller.state.agents.items;
+        if (selectedId !== null) {
+          const selected = items.find((item) => item.agentId === selectedId);
+          return selected !== undefined && selected.status === "active"
+            ? { agentId: selected.agentId, status: selected.status }
+            : null;
+        }
+        const firstActive = items.find((item) => item.status === "active");
+        return firstActive === undefined
+          ? null
+          : { agentId: firstActive.agentId, status: firstActive.status };
+      },
+      reloadAfterCommit: async () => {
+        // Session revisions are independent of the tenant read sections. A
+        // context reload here would transiently clear the authoritative role and
+        // erase the just-committed receipt, so no tenant reload is performed.
+      },
+    };
+    const sessionController = sessionsEnabled
+      ? new SessionController({
+          account,
+          reads: sessionReads,
+          onState: setSessionState,
+          // Deliberately NOT auto-navigating after a fresh issue: the one-time
+          // handoff must remain on the issue panel for exactly one reveal.
+        })
+      : null;
+    sessionControllerRef.current = sessionController;
+    // The commerce-action controller is constructed ONLY when its own flag and
+    // all prerequisites are enabled. It mounts no request until a protected
+    // action route initializes the independent public credentialless capability
+    // gate, and it never depends on tenant-write, machine, listing, policy,
+    // session, Vault, wallet or market flags. With it off, ZERO action or
+    // action-capability requests are made, and it never calls any of the three
+    // agent-audience authorization routes.
+    const actionReads: ActionReadCoordinator = {
+      currentOrganizationId: () => controller.currentOrganizationId(),
+      currentRole: () => controller.currentRole(),
+      currentAccountId: () =>
+        account.state.session.signedIn ? account.state.session.accountId : null,
+      abortPendingReads: () => controller.abortPendingReads(),
+    };
+    const actionController = actionsEnabled
+      ? new ActionController({
+          account,
+          reads: actionReads,
+          onState: setActionState,
+        })
+      : null;
+    actionControllerRef.current = actionController;
+    // The authorization-grant controller is constructed ONLY when its own flag
+    // and all prerequisites are enabled. It mounts no request until a protected
+    // grant route initializes the independent public credentialless capability
+    // gate. With it off, ZERO grant or grant-capability requests are made, and
+    // it never calls any of the three agent-audience or three provider-audience
+    // grant routes — the only two places a raw grant token exists on the wire.
+    const grantReads: GrantReadCoordinator = {
+      currentOrganizationId: () => controller.currentOrganizationId(),
+      currentRole: () => controller.currentRole(),
+      currentAccountId: () =>
+        account.state.session.signedIn ? account.state.session.accountId : null,
+      abortPendingReads: () => controller.abortPendingReads(),
+    };
+    const grantController = grantsEnabled
+      ? new GrantController({
+          account,
+          reads: grantReads,
+          onState: setGrantState,
+        })
+      : null;
+    grantControllerRef.current = grantController;
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
         // The hidden boundary is external and synchronous: a browser may
@@ -279,6 +695,15 @@ export default function TenantApp() {
           writeController?.clear();
           machineController?.clear();
           listingController?.clear();
+          policyController?.clear();
+          sessionController?.clear();
+          actionController?.clear();
+          grantController?.clear();
+          setPolicyFormGeneration((value) => value + 1);
+          setSessionFormGeneration((value) => value + 1);
+          setActionFormGeneration((value) => value + 1);
+          setGrantFormGeneration((value) => value + 1);
+          invalidateSessionPolicies();
         });
       }
     };
@@ -288,6 +713,15 @@ export default function TenantApp() {
         writeController?.clear();
         machineController?.clear();
         listingController?.clear();
+        policyController?.clear();
+        sessionController?.clear();
+        actionController?.clear();
+        grantController?.clear();
+        setPolicyFormGeneration((value) => value + 1);
+        setSessionFormGeneration((value) => value + 1);
+        setActionFormGeneration((value) => value + 1);
+        setGrantFormGeneration((value) => value + 1);
+        invalidateSessionPolicies();
       });
     };
     document.addEventListener("visibilitychange", onVisibility);
@@ -300,13 +734,21 @@ export default function TenantApp() {
       writeController?.dispose();
       machineController?.dispose();
       listingController?.dispose();
+      policyController?.dispose();
+      sessionController?.dispose();
+      actionController?.dispose();
+      grantController?.dispose();
       if (controllerRef.current === controller) controllerRef.current = null;
       if (writeControllerRef.current === writeController) writeControllerRef.current = null;
       if (machineControllerRef.current === machineController) machineControllerRef.current = null;
       if (listingControllerRef.current === listingController) listingControllerRef.current = null;
+      if (policyControllerRef.current === policyController) policyControllerRef.current = null;
+      if (sessionControllerRef.current === sessionController) sessionControllerRef.current = null;
+      if (actionControllerRef.current === actionController) actionControllerRef.current = null;
+      if (grantControllerRef.current === grantController) grantControllerRef.current = null;
       if (accountRef.current === account) accountRef.current = null;
     };
-  }, [enabled, known, writesEnabled, machineEnabled, listingEnabled]);
+  }, [enabled, known, writesEnabled, machineEnabled, listingEnabled, policyEnabled, sessionsEnabled, actionsEnabled, grantsEnabled, invalidateSessionPolicies]);
 
   // Clear the create/version selection when leaving the listing subtree.
   useEffect(() => {
@@ -317,12 +759,46 @@ export default function TenantApp() {
     listingControllerRef.current?.clearSensitive();
   }, [path]);
 
+  // Clear the create selection when leaving the policy subtree.
+  useEffect(() => {
+    if (isPolicyWorkspacePath(path)) return;
+    setPolicyCreating(false);
+    policyControllerRef.current?.clearSensitive();
+  }, [path]);
+
+  // Clear the session selection/secret when leaving the session subtree.
+  useEffect(() => {
+    if (isSessionWorkspacePath(path)) return;
+    sessionSelectedAgentRef.current = null;
+    setSessionSelectedAgent(null);
+    sessionControllerRef.current?.clear();
+    invalidateSessionPolicies();
+  }, [path, invalidateSessionPolicies]);
+
+  // Clear every action artifact when leaving the action subtree.
+  useEffect(() => {
+    if (isActionWorkspacePath(path)) return;
+    actionControllerRef.current?.clear();
+  }, [path]);
+
+  // Clear every grant artifact when leaving the grant subtree.
+  useEffect(() => {
+    if (isGrantWorkspacePath(path)) return;
+    grantControllerRef.current?.clear();
+  }, [path]);
+
+  // A selected-agent change invalidates the picker binding and aborts any
+  // in-flight policy page so a late response cannot repopulate options for the
+  // previous agent.
+  useEffect(() => {
+    invalidateSessionPolicies();
+  }, [sessionSelectedAgent, firstActiveAgentId, invalidateSessionPolicies]);
+
   // A signed-in identity change must never expose a previous account's
   // committed confirmation. The receipt belongs to the account that produced
   // it; a signed-out/expired transition (for example a self-demotion that
   // revoked this session) keeps the same account's committed evidence on
   // screen. Hidden/logout/navigation clears run separately in the flow.
-  const accountId = state.principal.accountId;
   const lastAccountRef = useRef<string | null>(null);
   useEffect(() => {
     if (accountId === null) return;
@@ -341,7 +817,14 @@ export default function TenantApp() {
       setListingCreating(false);
       setListingProviderId(null);
       setListingBaseVersion(null);
+      policyControllerRef.current?.clear();
+      setPolicyCreating(false);
       setSelectedProfile(null);
+      sessionSelectedAgentRef.current = null;
+      setSessionSelectedAgent(null);
+      sessionControllerRef.current?.clear();
+      actionControllerRef.current?.clear();
+      grantControllerRef.current?.clear();
     }
   }, [accountId]);
 
@@ -354,6 +837,10 @@ export default function TenantApp() {
     // The listing controller is independent of the machine flag, so reconcile
     // its role before the machine early-return below.
     listingControllerRef.current?.reconcileRole(role);
+    policyControllerRef.current?.reconcileRole(role);
+    sessionControllerRef.current?.reconcileRole(role);
+    actionControllerRef.current?.reconcileRole(role);
+    grantControllerRef.current?.reconcileRole(role);
     const machineController = machineControllerRef.current;
     if (machineController === null) return;
     // Role is authoritative from the current server context. Reconcile it
@@ -372,7 +859,15 @@ export default function TenantApp() {
     setListingProviderId(null);
     setListingBaseVersion(null);
     listingControllerRef.current?.clear();
-  }, [organizationId]);
+    policyControllerRef.current?.clear();
+    setPolicyCreating(false);
+    sessionSelectedAgentRef.current = null;
+    setSessionSelectedAgent(null);
+    sessionControllerRef.current?.clear();
+    actionControllerRef.current?.clear();
+    grantControllerRef.current?.clear();
+    invalidateSessionPolicies();
+  }, [organizationId, invalidateSessionPolicies]);
 
   // Initialize the listing controller only for a protected listing route. This
   // effect is declared AFTER the organization/role reconciliation effects so it
@@ -386,6 +881,109 @@ export default function TenantApp() {
     if (route === null) return;
     void listingController.initialize(route);
   }, [path, listingEnabled, organizationId, role, accountId]);
+
+  // Initialize the policy controller only for a protected policy route. The
+  // capability probe runs first; when it is not `enabled`, no policy request is
+  // made and an honest unavailable state is rendered.
+  useEffect(() => {
+    const policyController = policyControllerRef.current;
+    if (policyController === null) return;
+    const route = policyRouteOf(path);
+    if (route === null) return;
+    void policyController.initialize(route);
+    // The policy create form needs the EXISTING current-organization agent read
+    // state. Load that bounded read once for the new route (never a machine
+    // profile and never a new endpoint).
+    if (route.kind === "new") void controllerRef.current?.loadAgents();
+  }, [path, policyEnabled, organizationId, role, accountId]);
+
+  // Initialize the session controller only for a protected session route. The
+  // public credentialless capability probe runs first; when it is not
+  // `enabled`, no session request is made and an honest unavailable state is
+  // rendered. The issue form needs the EXISTING current-organization agent read
+  // state, so it is loaded once for the new route (never a machine profile and
+  // never a new endpoint).
+  useEffect(() => {
+    const sessionController = sessionControllerRef.current;
+    if (sessionController === null) return;
+    const route = sessionRouteOf(path);
+    if (route === null) return;
+    void sessionController.initialize(route);
+    if (route.kind === "new") void controllerRef.current?.loadAgents();
+  }, [path, sessionsEnabled, organizationId, role, accountId]);
+
+  // Initialize the action controller only for a protected action route. The
+  // public credentialless capability probe runs first; when it is not
+  // `enabled`, no action request is made and an honest unavailable state is
+  // rendered.
+  useEffect(() => {
+    const actionController = actionControllerRef.current;
+    if (actionController === null) return;
+    const route = actionRouteOf(path);
+    if (route === null) return;
+    void actionController.initialize(route);
+  }, [path, actionsEnabled, organizationId, role, accountId]);
+
+  // Initialize the grant controller only for a protected grant route. The
+  // public credentialless capability probe runs first; when it is not
+  // `enabled`, no grant request is made and an honest unavailable state is
+  // rendered. The lookup route issues no request at all: there is no grant list
+  // endpoint and this console will not invent one.
+  useEffect(() => {
+    const grantController = grantControllerRef.current;
+    if (grantController === null) return;
+    const route = grantRouteOf(path);
+    if (route === null) return;
+    void grantController.initialize(route);
+  }, [path, grantsEnabled, organizationId, role, accountId]);
+
+  // After the render where the grant context is current, record the bound
+  // account/organization/role so the NEXT transition render suppresses
+  // synchronously before any child can read a stale grant detail or revoke.
+  useEffect(() => {
+    if (
+      grantControllerRef.current === null ||
+      !isGrantWorkspacePath(path) ||
+      organizationId === null ||
+      accountId === null
+    ) {
+      boundGrantContextRef.current = null;
+      return;
+    }
+    boundGrantContextRef.current = { accountId, organizationId, role };
+  }, [path, organizationId, accountId, role]);
+
+  // After the render where the action context is current, record the bound
+  // account/organization/role so the NEXT transition render suppresses
+  // synchronously before any child can read a stale queue, detail or decision.
+  useEffect(() => {
+    if (
+      actionControllerRef.current === null ||
+      !isActionWorkspacePath(path) ||
+      organizationId === null ||
+      accountId === null
+    ) {
+      boundActionContextRef.current = null;
+      return;
+    }
+    boundActionContextRef.current = { accountId, organizationId, role };
+  }, [path, organizationId, accountId, role]);
+
+  // After the render where the session context is current, record the bound
+  // account/organization/role so the NEXT transition render suppresses
+  // synchronously before any child can read a stale draft, receipt or secret.
+  useEffect(() => {
+    if (
+      sessionControllerRef.current === null ||
+      !isSessionWorkspacePath(path) ||
+      organizationId === null ||
+      accountId === null
+    ) {
+      boundSessionContextRef.current = null;
+      return;
+    }
+    boundSessionContextRef.current = { accountId, organizationId, role };
+  }, [path, organizationId, accountId, role]);
 
   // After the render where the machine context is current, record the bound
   // context so the NEXT transition render can suppress synchronously. When the
@@ -419,6 +1017,22 @@ export default function TenantApp() {
       return;
     }
     boundListingContextRef.current = { accountId, organizationId, role };
+  }, [path, organizationId, accountId, role]);
+
+  // After the render where the policy context is current, record the bound
+  // account/organization/role so the NEXT transition render suppresses
+  // synchronously before any child can read a stale draft, receipt or list.
+  useEffect(() => {
+    if (
+      policyControllerRef.current === null ||
+      !isPolicyWorkspacePath(path) ||
+      organizationId === null ||
+      accountId === null
+    ) {
+      boundPolicyContextRef.current = null;
+      return;
+    }
+    boundPolicyContextRef.current = { accountId, organizationId, role };
   }, [path, organizationId, accountId, role]);
 
   // Synchronous privacy guard: effects run after render, so the effect above
@@ -467,6 +1081,69 @@ export default function TenantApp() {
           : null,
         { accountId, organizationId, role },
       ));
+
+  const suppressPolicy =
+    policyControllerRef.current !== null &&
+    (suppressPriorMutation ||
+      suppressStalePolicyContext(
+        boundPolicyContextRef.current !== null && accountId !== null && organizationId !== null
+          ? {
+              accountId: boundPolicyContextRef.current.accountId,
+              organizationId: boundPolicyContextRef.current.organizationId,
+              role: boundPolicyContextRef.current.role,
+            }
+          : null,
+        { accountId, organizationId, role },
+      ));
+
+  const suppressSession =
+    sessionControllerRef.current !== null &&
+    (suppressPriorMutation ||
+      suppressStaleSessionContext(
+        boundSessionContextRef.current,
+        { accountId, organizationId, role },
+      ));
+
+  const suppressAction =
+    actionControllerRef.current !== null &&
+    (suppressPriorMutation ||
+      suppressStaleActionContext(
+        boundActionContextRef.current,
+        { accountId, organizationId, role },
+      ));
+
+  const suppressGrant =
+    grantControllerRef.current !== null &&
+    (suppressPriorMutation ||
+      suppressStaleGrantContext(
+        boundGrantContextRef.current,
+        { accountId, organizationId, role },
+      ));
+
+  // The policy create editor is keyed by its FULL bound context plus the
+  // external privacy generation. A context change remounts it in the SAME
+  // render (so no stale caps/allowlists/expiry/agent selection survive), and a
+  // hidden/pagehide boundary bumps the generation inside flushSync so the
+  // remount happens before the next paint. This is a privacy guard only: it
+  // never derives server authority.
+  const policyFormKey = `${accountId ?? "anon"}|${organizationId ?? "none"}|${role ?? "none"}|${policyFormGeneration}`;
+
+  // The session issue/list subtree is keyed by its FULL bound context so a
+  // context change remounts it and no typed policy id or one-time secret can
+  // survive a same-route organization/role transition.
+  const sessionFormKey = `${accountId ?? "anon"}|${organizationId ?? "none"}|${role ?? "none"}|${
+    sessionSelectedAgent ?? "none"
+  }|${path === "/app/sessions/new" ? "new" : "list"}|${sessionFormGeneration}`;
+
+  // The action console subtree is keyed by its FULL bound context so a context
+  // change remounts it and no typed exposure subject or pending confirmation
+  // can survive a same-route organization/role transition.
+  const actionFormKey = `${accountId ?? "anon"}|${organizationId ?? "none"}|${role ?? "none"}|${actionFormGeneration}`;
+
+  // The grant console subtree is keyed by its FULL bound context so a context
+  // change remounts it and no typed grant id or pending confirmation can
+  // survive a same-route organization/role transition.
+  const grantFormKey = `${accountId ?? "anon"}|${organizationId ?? "none"}|${role ?? "none"}|${grantFormGeneration}`;
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -523,9 +1200,16 @@ export default function TenantApp() {
   const navigate = useCallback((next: AppPath) => {
     writeControllerRef.current?.clear();
     listingControllerRef.current?.clearSensitive();
+    policyControllerRef.current?.clearSensitive();
+    sessionControllerRef.current?.clear();
+    actionControllerRef.current?.clear();
+    grantControllerRef.current?.clear();
     setListingCreating(false);
     setListingProviderId(null);
     setListingBaseVersion(null);
+    setPolicyCreating(false);
+    sessionSelectedAgentRef.current = null;
+    setSessionSelectedAgent(null);
     setMutationState(initialTenantMutationState());
     setDrawerOpen(false);
     window.history.pushState(null, "", next);
@@ -542,6 +1226,124 @@ export default function TenantApp() {
   useEffect(() => {
     listingOpenRef.current = openListing;
   }, [openListing]);
+
+  const openPolicy = useCallback((policyId: string) => {
+    const route = parsePolicyRoute(`/app/budgets/${encodeURIComponent(policyId)}`);
+    if (route === null || route.kind !== "detail") return;
+    setDrawerOpen(false);
+    window.history.pushState(null, "", `/app/budgets/${encodeURIComponent(route.policyId)}`);
+    setPath({ kind: "policy-detail", policyId: route.policyId });
+  }, []);
+  useEffect(() => {
+    policyOpenRef.current = openPolicy;
+  }, [openPolicy]);
+
+  const openSession = useCallback((sessionId: string) => {
+    const route = parseSessionRoute(`/app/sessions/${encodeURIComponent(sessionId)}`);
+    if (route === null || route.kind !== "detail") return;
+    setDrawerOpen(false);
+    window.history.pushState(null, "", `/app/sessions/${encodeURIComponent(route.sessionId)}`);
+    setPath({ kind: "session-detail", sessionId: route.sessionId });
+  }, []);
+  const openSessionCreate = useCallback(() => {
+    navigate("/app/sessions/new");
+  }, [navigate]);
+
+  const openAction = useCallback((actionId: string) => {
+    const route = parseActionRoute(`/app/actions/${encodeURIComponent(actionId)}`);
+    if (route === null || route.kind !== "detail") return;
+    setDrawerOpen(false);
+    window.history.pushState(null, "", `/app/actions/${encodeURIComponent(route.actionId)}`);
+    setPath({ kind: "action-detail", actionId: route.actionId });
+  }, []);
+
+  const openApproval = useCallback((approvalId: string) => {
+    const route = parseActionRoute(`/app/actions/approvals/${encodeURIComponent(approvalId)}`);
+    if (route === null || route.kind !== "approval-detail") return;
+    setDrawerOpen(false);
+    window.history.pushState(
+      null,
+      "",
+      `/app/actions/approvals/${encodeURIComponent(route.approvalId)}`,
+    );
+    setPath({ kind: "approval-detail", approvalId: route.approvalId });
+  }, []);
+
+  const openGrant = useCallback((grantId: string) => {
+    const route = parseGrantRoute(`/app/grants/${encodeURIComponent(grantId)}`);
+    if (route === null || route.kind !== "detail") return;
+    setDrawerOpen(false);
+    window.history.pushState(null, "", `/app/grants/${encodeURIComponent(route.grantId)}`);
+    setPath({ kind: "grant-detail", grantId: route.grantId });
+  }, []);
+
+  // Bounded current-organization policy picker via the accepted PolicyClient
+  // directly. It runs ONLY when the existing policy UI and capability are
+  // enabled; with policy off it makes NO policy request and the manual field
+  // stays usable. The picker binds the active policy to the selected agent's
+  // current organization and never borrows a stale org.
+  // The picker is an OPTIONAL, frozen dependency. It runs ONLY when the policy
+  // UI is enabled AND the independent policy capability is `enabled` (a
+  // credentialless probe). It binds each option to the selected current-org
+  // active agent and REPLACES the bounded page instead of accumulating pages.
+  // With policy off (or capability not enabled) it makes NO policy request and
+  // the manual canonical policy ID stays usable.
+  const loadSessionPolicies = useCallback(
+    async (cursor: string | null, selectedAgentId: string | null) => {
+      if (!policyEnabled) return;
+      const organizationId = controllerRef.current?.currentOrganizationId() ?? null;
+      if (organizationId === null || selectedAgentId === null) return;
+      sessionPolicyGenerationRef.current += 1;
+      const generation = sessionPolicyGenerationRef.current;
+      sessionPolicyControllerRef.current?.abort();
+      const abort = new AbortController();
+      sessionPolicyControllerRef.current = abort;
+      setSessionPolicyStatus("loading");
+      try {
+        // A bounded keyed same-paint remount already cleared the previous page;
+        // this replaces it (no unbounded accumulation across pages).
+        const capability = await readPolicyManagementCapability(abort.signal);
+        if (abort.signal.aborted || generation !== sessionPolicyGenerationRef.current) return;
+        if (capability !== "enabled") {
+          setSessionPolicyOptions([]);
+          setSessionPolicyNext(null);
+          setSessionPolicyStatus("none");
+          return;
+        }
+        const page = await new PolicyClient().listRoots(
+          { organizationId, ...(cursor === null ? {} : { afterPolicyId: cursor }), limit: 50 },
+          abort.signal,
+        );
+        if (abort.signal.aborted || generation !== sessionPolicyGenerationRef.current) return;
+        if (controllerRef.current?.currentOrganizationId() !== organizationId) return;
+        if (controllerRef.current?.currentRole() !== role) return;
+        setSessionPolicyOptions(
+          page.items
+            .filter(
+              (item) =>
+                item.subjectAgentId === selectedAgentId &&
+                item.status === "active" &&
+                item.organizationId === organizationId,
+            )
+            .map((item) => ({ policyId: item.policyId, status: item.status })),
+        );
+        setSessionPolicyNext(page.nextCursor);
+        setSessionPolicyStatus("ready");
+      } catch {
+        if (abort.signal.aborted || generation !== sessionPolicyGenerationRef.current) return;
+        setSessionPolicyOptions([]);
+        setSessionPolicyNext(null);
+        setSessionPolicyStatus("error");
+      }
+    },
+    [policyEnabled, role],
+  );
+
+  const loadMoreSessionPolicies = useCallback(() => {
+    const cursor = sessionPolicyNext;
+    if (cursor === null) return;
+    void loadSessionPolicies(cursor, sessionEffectiveAgentId);
+  }, [loadSessionPolicies, sessionPolicyNext, sessionEffectiveAgentId]);
 
   const selectOrganization = useCallback(
     (organizationId: string) => {
@@ -569,7 +1371,11 @@ export default function TenantApp() {
       : path === "unknown"
         ? null
         : typeof path === "object"
-          ? "/app/provider/listings"
+          ? path.kind === "policy-detail"
+            ? "/app/budgets"
+            : path.kind === "session-detail"
+              ? "/app/sessions"
+              : "/app/provider/listings"
           : path;
 
   return (
@@ -685,6 +1491,46 @@ export default function TenantApp() {
               listingControllerRef.current?.selectVersion(version);
             }}
             onOpenListing={openListing}
+            policyEnabled={policyEnabled}
+            policyState={renderPolicyState(suppressPolicy, policyState)}
+            policyController={suppressPolicy ? null : policyControllerRef.current}
+            policyCreating={policyCreating}
+            policyFormKey={policyFormKey}
+            onStartPolicyCreate={() => {
+              setPolicyCreating(true);
+              void controllerRef.current?.loadAgents();
+            }}
+            onCancelPolicyCreate={() => setPolicyCreating(false)}
+            onOpenPolicy={openPolicy}
+            sessionsEnabled={sessionsEnabled}
+            sessionState={renderSessionState(suppressSession, sessionState)}
+            sessionController={suppressSession ? null : sessionControllerRef.current}
+            sessionSelectedAgentId={sessionSelectedAgent}
+            onSelectSessionAgent={(agentId) => {
+              sessionSelectedAgentRef.current = agentId;
+              setSessionSelectedAgent(agentId);
+              sessionControllerRef.current?.selectAgent(agentId);
+            }}
+            policyPickerEnabled={policyEnabled}
+            policyOptions={sessionPolicyOptions}
+            policyOptionsStatus={sessionPolicyStatus}
+            hasNextPolicies={sessionPolicyNext !== null}
+            onLoadPolicies={() => void loadSessionPolicies(null, sessionEffectiveAgentId)}
+            onLoadMorePolicies={() => void loadMoreSessionPolicies()}
+            onOpenSession={openSession}
+            onStartSessionIssue={openSessionCreate}
+            sessionFormKey={sessionFormKey}
+            actionsEnabled={actionsEnabled}
+            actionState={renderActionState(suppressAction, actionState)}
+            actionController={suppressAction ? null : actionControllerRef.current}
+            actionFormKey={actionFormKey}
+            onOpenAction={openAction}
+            onOpenApproval={openApproval}
+            grantsEnabled={grantsEnabled}
+            grantState={renderGrantState(suppressGrant, grantState)}
+            grantController={suppressGrant ? null : grantControllerRef.current}
+            grantFormKey={grantFormKey}
+            onOpenGrant={openGrant}
           />
         </main>
 
@@ -718,6 +1564,10 @@ function Rail(props: RailProps) {
     { path: "/app/agents", label: "Agents" },
     { path: "/app/provider", label: "Provider" },
     { path: "/app/provider/listings", label: "Listings" },
+    { path: "/app/budgets", label: "Budgets" },
+    { path: "/app/sessions", label: "Sessions" },
+    { path: "/app/actions", label: "Actions" },
+    { path: "/app/grants", label: "Grants" },
   ];
   return (
     <nav
@@ -841,6 +1691,39 @@ interface WorkspaceProps {
   onCancelListingCreate: () => void;
   onSelectListingBaseVersion: (version: CommerceListingOwnerVersion) => void;
   onOpenListing: (listingId: string) => void;
+  policyEnabled: boolean;
+  policyState: PolicyControllerState;
+  policyController: PolicyController | null;
+  policyCreating: boolean;
+  policyFormKey: string;
+  onStartPolicyCreate: () => void;
+  onCancelPolicyCreate: () => void;
+  onOpenPolicy: (policyId: string) => void;
+  sessionsEnabled: boolean;
+  sessionState: SessionControllerState;
+  sessionController: SessionController | null;
+  sessionSelectedAgentId: string | null;
+  onSelectSessionAgent: (agentId: string | null) => void;
+  policyPickerEnabled: boolean;
+  policyOptions: readonly { policyId: string; status: string }[];
+  policyOptionsStatus: "none" | "loading" | "ready" | "error";
+  hasNextPolicies: boolean;
+  onLoadPolicies: () => void;
+  onLoadMorePolicies: () => void;
+  onOpenSession: (sessionId: string) => void;
+  onStartSessionIssue: () => void;
+  sessionFormKey: string;
+  actionsEnabled: boolean;
+  actionState: ActionControllerState;
+  actionController: ActionController | null;
+  actionFormKey: string;
+  onOpenAction: (actionId: string) => void;
+  onOpenApproval: (approvalId: string) => void;
+  grantsEnabled: boolean;
+  grantState: GrantControllerState;
+  grantController: GrantController | null;
+  grantFormKey: string;
+  onOpenGrant: (grantId: string) => void;
 }
 
 function Workspace(props: WorkspaceProps) {
@@ -869,6 +1752,38 @@ function Workspace(props: WorkspaceProps) {
     // constructed and the section is honestly unavailable. With the flag on the
     // controller's independent capability gate decides the rendered state.
     if (!props.listingEnabled) return <NotAvailable onNavigate={props.onNavigate} />;
+  }
+
+  const policyRoute = policyRouteOf(props.path);
+  if (policyRoute !== null) {
+    // A policy route is known (not "unknown"): with the flag off nothing was
+    // constructed and the section is honestly unavailable. With the flag on the
+    // controller's independent capability gate decides the rendered state.
+    if (!props.policyEnabled) return <NotAvailable onNavigate={props.onNavigate} />;
+  }
+
+  const actionRoute = actionRouteOf(props.path);
+  if (actionRoute !== null) {
+    // An action route is known (not "unknown"): with the flag off nothing was
+    // constructed and the section is honestly unavailable. With the flag on the
+    // controller's independent public capability gate decides the rendered state.
+    if (!props.actionsEnabled) return <NotAvailable onNavigate={props.onNavigate} />;
+  }
+
+  const grantRoute = grantRouteOf(props.path);
+  if (grantRoute !== null) {
+    // A grant route is known (not "unknown"): with the flag off nothing was
+    // constructed and the section is honestly unavailable. With the flag on the
+    // controller's independent public capability gate decides the rendered state.
+    if (!props.grantsEnabled) return <NotAvailable onNavigate={props.onNavigate} />;
+  }
+
+  const sessionRoute = sessionRouteOf(props.path);
+  if (sessionRoute !== null) {
+    // A session route is known (not "unknown"): with the flag off nothing was
+    // constructed and the section is honestly unavailable. With the flag on the
+    // controller's independent public capability gate decides the rendered state.
+    if (!props.sessionsEnabled) return <NotAvailable onNavigate={props.onNavigate} />;
   }
 
   if (state.refreshRequired && principal.status === "signed-in" && state.organizations.status === "none") {
@@ -1037,6 +1952,74 @@ function Workspace(props: WorkspaceProps) {
         onCancelCreate={props.onCancelListingCreate}
         onSelectBaseVersion={props.onSelectListingBaseVersion}
         onOpenListing={props.onOpenListing}
+        onNavigate={props.onNavigate}
+      />
+    );
+  }
+
+  if (policyRoute !== null) {
+    return (
+      <PolicyWorkspace
+        route={policyRoute}
+        state={props.policyState}
+        tenantController={props.controller}
+        policyController={props.policyController}
+        creating={props.policyCreating}
+        formKey={props.policyFormKey}
+        onStartCreate={props.onStartPolicyCreate}
+        onCancelCreate={props.onCancelPolicyCreate}
+        onOpenPolicy={props.onOpenPolicy}
+      />
+    );
+  }
+
+  if (actionRoute !== null) {
+    return (
+      <ActionWorkspace
+        key={`action-context:${props.actionFormKey}`}
+        route={actionRoute}
+        state={props.actionState}
+        controller={props.actionController}
+        formKey={props.actionFormKey}
+        onOpenAction={props.onOpenAction}
+        onOpenApproval={props.onOpenApproval}
+        onNavigate={props.onNavigate}
+      />
+    );
+  }
+
+  if (grantRoute !== null) {
+    return (
+      <GrantWorkspace
+        key={`grant-context:${props.grantFormKey}`}
+        route={grantRoute}
+        state={props.grantState}
+        controller={props.grantController}
+        formKey={props.grantFormKey}
+        onOpenGrant={props.onOpenGrant}
+        onNavigate={props.onNavigate}
+      />
+    );
+  }
+
+  if (sessionRoute !== null) {
+    return (
+      <SessionWorkspace
+        key={`session-context:${props.sessionFormKey}`}
+        route={sessionRoute}
+        state={props.sessionState}
+        controller={props.sessionController}
+        tenantController={props.controller}
+        selectedAgentId={props.sessionSelectedAgentId}
+        onSelectAgent={props.onSelectSessionAgent}
+        policyPickerEnabled={props.policyPickerEnabled}
+        policyOptions={props.policyOptions}
+        policyOptionsStatus={props.policyOptionsStatus}
+        hasNextPolicies={props.hasNextPolicies}
+        onLoadPolicies={props.onLoadPolicies}
+        onLoadMorePolicies={props.onLoadMorePolicies}
+        onOpenSession={props.onOpenSession}
+        onStartIssue={props.onStartSessionIssue}
         onNavigate={props.onNavigate}
       />
     );
@@ -1614,6 +2597,711 @@ function ListingMutationStatusView(props: {
   return (
     <section aria-labelledby="listing-unknown-title">
       <h3 className="tenant-title tenant-title--small" id="listing-unknown-title">
+        The write outcome is unknown
+      </h3>
+      <p className="tenant-status tenant-status--warning" role="status">
+        {mutation.statusMessage ??
+          "The write may have committed. Only an explicit status check with the original mutation id can resolve it."}
+      </p>
+      <div className="tenant-actions">
+        <button
+          type="button"
+          className="tenant-button"
+          disabled={mutation.checking}
+          onClick={() => void props.controller?.checkStatus()}
+        >
+          Check status
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Protected policy-rules workspace.
+ *
+ * These are policy RULES only. No funds are reserved, committed, moved or
+ * executed here, and no available/reserved/spent counter exists. The
+ * independent capability gate is rendered honestly: `checking` is a status,
+ * `unavailable` is never fake empty data.
+ */
+function PolicyWorkspace(props: {
+  route: PolicyRoute;
+  state: PolicyControllerState;
+  tenantController: TenantController | null;
+  policyController: PolicyController | null;
+  creating: boolean;
+  formKey: string;
+  onStartCreate: () => void;
+  onCancelCreate: () => void;
+  onOpenPolicy: (policyId: string) => void;
+}) {
+  const controller = props.policyController;
+  if (props.state.capability === "unknown" || props.state.capability === "checking") {
+    return <p className="tenant-status" role="status">Checking policy availability…</p>;
+  }
+  if (props.state.capability === "unavailable") {
+    return (
+      <section aria-labelledby="policy-unavailable-title">
+        <p className="tenant-eyebrow">POLICY RULES</p>
+        <h1 className="tenant-title" id="policy-unavailable-title">
+          Policy management is not available in this deployment
+        </h1>
+        <p className="tenant-status tenant-status--warning" role="status">
+          The control capability manifest does not enable policy management here. No policy
+          request was made and no empty rule set is implied.
+        </p>
+      </section>
+    );
+  }
+  const agents: readonly CommerceAgentProfile[] = props.tenantController?.state.agents.items ?? [];
+  const agentsStatus = props.tenantController?.state.agents.status ?? "none";
+  const agentsNextCursor = props.tenantController?.state.agents.nextCursor ?? null;
+  return (
+    <div className="tenant-policies">
+      <p className="tenant-eyebrow">POLICY RULES</p>
+      <h1 className="tenant-title">Budgets</h1>
+      {/*
+        Prominent truthful copy required by the contract: these are rules only.
+      */}
+      <p className="tenant-status tenant-status--warning" role="status">
+        These are policy rules only. No funds are reserved, committed, moved, or executed here.
+      </p>
+      <p className="tenant-status" role="status">
+        {props.state.canWrite
+          ? "You can create and manage policy rules. Every write requires an explicit confirmation and is server-authorized."
+          : "Your role is read-only here. Only owner and operator roles can write."}
+      </p>
+      <PolicyMutationStatusView state={props.state.mutation} controller={controller} />
+      {props.route.kind === "roots" || props.route.kind === "new" ? (
+        <PolicyListPanel
+          state={props.state}
+          creating={props.creating || props.route.kind === "new"}
+          formKey={props.formKey}
+          agents={agents}
+          agentsStatus={agentsStatus}
+          onLoadAgents={() => void props.tenantController?.loadAgents()}
+          onLoadMoreAgents={() => void props.tenantController?.loadNextAgents()}
+          hasNextAgents={agentsNextCursor !== null}
+          organizationId={props.tenantController?.currentOrganizationId() ?? ""}
+          onStartCreate={props.onStartCreate}
+          onCancelCreate={props.onCancelCreate}
+          onLoadRoots={() => void controller?.loadRoots()}
+          onNextRoots={() => void controller?.loadNextRoots()}
+          onSubmitCreate={(content) => controller?.beginCreate(content)}
+          onOpenPolicy={props.onOpenPolicy}
+        />
+      ) : (
+        <PolicyDetailView state={props.state} controller={controller} onNavigate={undefined} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Protected commerce-session workspace.
+ *
+ * Owner/operator on a current non-recovery account may read and write; viewers,
+ * providers and unknown/recovery get a clear no-access state and no request or
+ * control. The independent public capability gate is rendered honestly:
+ * `checking` is a status and `unavailable` is never fake empty data. No wallet
+ * is connected, no money is reserved and no purchase is made.
+ */
+function SessionWorkspace(props: {
+  route: SessionRoute;
+  state: SessionControllerState;
+  controller: SessionController | null;
+  tenantController: TenantController | null;
+  selectedAgentId: string | null;
+  onSelectAgent: (agentId: string | null) => void;
+  policyPickerEnabled: boolean;
+  policyOptions: readonly { policyId: string; status: string }[];
+  policyOptionsStatus: "none" | "loading" | "ready" | "error";
+  hasNextPolicies: boolean;
+  onLoadPolicies: () => void;
+  onLoadMorePolicies: () => void;
+  onOpenSession: (sessionId: string) => void;
+  onStartIssue: () => void;
+  onNavigate: (path: AppPath) => void;
+}) {
+  const controller = props.controller;
+  if (props.state.capability === "unknown" || props.state.capability === "checking") {
+    return <p className="tenant-status" role="status">Checking commerce-session availability…</p>;
+  }
+  if (props.state.capability === "unavailable") {
+    return (
+      <section aria-labelledby="session-unavailable-title">
+        <p className="tenant-eyebrow">COMMERCE SESSIONS</p>
+        <h1 className="tenant-title" id="session-unavailable-title">
+          Commerce sessions are not available in this deployment
+        </h1>
+        <p className="tenant-status tenant-status--warning" role="status">
+          The public session capability manifest does not enable commerce sessions here. No session
+          request was made and no empty list is implied.
+        </p>
+      </section>
+    );
+  }
+  // Owner/operator only. Viewers, providers, unknown and recovery accounts get a
+  // clear no-access state and NO request or control. Viewer readonly access is
+  // never inferred here.
+  if (!props.state.canRead) {
+    return <SessionNoAccess />;
+  }
+  const agents =
+    props.tenantController?.state.agents.items.map((agent) => ({
+      agentId: agent.agentId,
+      displayName: agent.displayName,
+      status: agent.status,
+    })) ?? [];
+  const agentsStatus = props.tenantController?.state.agents.status ?? "none";
+  const onLoadAgents = () => void props.tenantController?.loadAgents();
+  const issuePanel = (
+    <SessionIssuePanel
+      state={props.state}
+      controller={controller}
+      agents={agents}
+      agentsStatus={agentsStatus}
+      onLoadAgents={onLoadAgents}
+      policyPickerEnabled={props.policyPickerEnabled}
+      policyOptions={props.policyOptions}
+      policyOptionsStatus={props.policyOptionsStatus}
+      hasNextPolicies={props.hasNextPolicies}
+      onLoadPolicies={props.onLoadPolicies}
+      onLoadMorePolicies={props.onLoadMorePolicies}
+      selectedAgentId={props.selectedAgentId}
+      onSelectAgent={props.onSelectAgent}
+      onIssue={(input) => controller?.beginIssue(input)}
+      onDismissSecret={() => controller?.dismissSecret()}
+      onCopySecret={(secret) => {
+        // Clipboard only on an explicit user click; never automatic.
+        void navigator.clipboard?.writeText(secret).catch(() => undefined);
+      }}
+      onCancel={() => controller?.cancel()}
+      onConfirm={() => void controller?.confirm()}
+      onCheckStatus={() => void controller?.checkStatus()}
+      onNavigateDetail={props.onOpenSession}
+    />
+  );
+  return (
+    <div className="tenant-sessions">
+      <p className="tenant-eyebrow">COMMERCE SESSIONS</p>
+      <h1 className="tenant-title">Sessions</h1>
+      <p className="tenant-status tenant-status--warning" role="status">
+        These are one-time, short-lived handoffs for an existing same-agent authenticated client.
+        They do not connect or sign a wallet, reserve money or make purchases.
+      </p>
+      {props.route.kind === "detail" ? (
+        <>
+          {/*
+            The DETAIL route for a session also renders the shared mutation view
+            so a revoke confirm/cancel, a committed receipt or an unknown-outcome
+            status recovery is never invisible. Fresh issue delivery stays on the
+            new/list panel only and is never auto-navigated away.
+          */}
+          <SessionMutationView
+            mutation={props.state.mutation}
+            availableOnce={props.state.availableOnce}
+            handoffExpiresAt={
+              props.state.mutation.kind === "committed"
+                ? props.state.mutation.committed.handoffExpiresAt
+                : null
+            }
+            controller={controller}
+            onDismissSecret={() => controller?.dismissSecret()}
+            onCopySecret={(secret) => {
+              void navigator.clipboard?.writeText(secret).catch(() => undefined);
+            }}
+            onCancel={() => controller?.cancel()}
+            onConfirm={() => void controller?.confirm()}
+            onCheckStatus={() => void controller?.checkStatus()}
+          />
+          <SessionStatusPanel
+            state={props.state}
+            controller={controller}
+            sessionId={props.route.sessionId}
+            onBack={() => props.onNavigate("/app/sessions")}
+          />
+        </>
+      ) : props.route.kind === "new" ? (
+        issuePanel
+      ) : (
+        <>
+          {issuePanel}
+          <SessionListPanel
+            state={props.state}
+            controller={controller}
+            onOpenSession={props.onOpenSession}
+            onStartIssue={props.onStartIssue}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+interface GrantWorkspaceProps {
+  route: GrantRoute;
+  state: GrantControllerState;
+  controller: GrantController | null;
+  formKey: string;
+  onOpenGrant: (grantId: string) => void;
+  onNavigate: (path: AppPath) => void;
+}
+
+/**
+ * The authorization-grant console shell.
+ *
+ * The independent public capability probe runs before any grant request, so a
+ * deployment without the grant surface renders an honest unavailable state and
+ * issues zero requests. Nothing here is a demo: every field comes from the
+ * server or is not shown at all, and there is no earnings, reputation or
+ * payment card anywhere on this surface.
+ */
+function GrantWorkspace(props: GrantWorkspaceProps) {
+  const controller = props.controller;
+  if (props.route.kind === "invalid") {
+    return (
+      <p className="tenant-status tenant-status--warning" role="status">
+        That grant address is not valid. No request was made.
+      </p>
+    );
+  }
+  if (props.state.capability === "unknown" || props.state.capability === "checking") {
+    return (
+      <p className="tenant-status" role="status">
+        Checking authorization-grant availability…
+      </p>
+    );
+  }
+  if (props.state.capability === "unavailable") {
+    return (
+      <section aria-labelledby="grant-unavailable-title">
+        <p className="tenant-eyebrow">AUTHORIZATION GRANTS</p>
+        <h1 className="tenant-title" id="grant-unavailable-title">
+          Authorization grants are not available in this deployment
+        </h1>
+        <p className="tenant-status tenant-status--warning" role="status">
+          The public grant capability manifest does not enable the grant console here. No grant
+          request was made and no grant record is implied.
+        </p>
+      </section>
+    );
+  }
+  if (!props.state.canRead) {
+    return <GrantNoAccess />;
+  }
+  return (
+    <div className="tenant-grants-console">
+      <p className="tenant-eyebrow">AUTHORIZATION GRANTS</p>
+      <h1 className="tenant-title">Authorization grants</h1>
+      <p className="tenant-status tenant-status--warning" role="status">
+        This console reads and revokes authorization grants. It connects no wallet, signs nothing,
+        moves no money, and never reports a payment, settlement, delivery or refund. Revoking
+        retires permission; it does not get money back.
+      </p>
+      {props.route.kind === "lookup" ? (
+        <GrantLookupPanel
+          state={props.state}
+          controller={controller}
+          onOpenGrant={props.onOpenGrant}
+          formKey={props.formKey}
+        />
+      ) : null}
+      {props.route.kind === "detail" ? (
+        <GrantDetailPanel
+          state={props.state}
+          controller={controller}
+          grantId={props.route.grantId}
+          onBack={() => props.onNavigate("/app/grants")}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function GrantNoAccess() {
+  return (
+    <section aria-labelledby="grant-no-access-title">
+      <p className="tenant-eyebrow">NOT ALLOWED</p>
+      <h1 className="tenant-title" id="grant-no-access-title">
+        You do not have access to authorization grants
+      </h1>
+      <p className="tenant-status tenant-status--warning" role="status">
+        Your role in this organization cannot read authorization grants. No grant request was made
+        and no grant record is implied.
+      </p>
+    </section>
+  );
+}
+
+interface ActionWorkspaceProps {
+  route: ActionRoute;
+  state: ActionControllerState;
+  controller: ActionController | null;
+  formKey: string;
+  onOpenAction: (actionId: string) => void;
+  onOpenApproval: (approvalId: string) => void;
+  onNavigate: (path: AppPath) => void;
+}
+
+/**
+ * The commerce action/approval console shell.
+ *
+ * The independent public capability probe runs before any action request, so a
+ * deployment without the action surface renders an honest unavailable state and
+ * issues zero requests. Nothing here is a demo: every row and figure comes from
+ * the server or is not shown at all.
+ */
+function ActionWorkspace(props: ActionWorkspaceProps) {
+  const controller = props.controller;
+  if (props.route.kind === "invalid") {
+    return (
+      <p className="tenant-status tenant-status--warning" role="status">
+        That action address is not valid. No request was made.
+      </p>
+    );
+  }
+  if (props.state.capability === "unknown" || props.state.capability === "checking") {
+    return (
+      <p className="tenant-status" role="status">
+        Checking commerce-action availability…
+      </p>
+    );
+  }
+  if (props.state.capability === "unavailable") {
+    return (
+      <section aria-labelledby="action-unavailable-title">
+        <p className="tenant-eyebrow">COMMERCE ACTIONS</p>
+        <h1 className="tenant-title" id="action-unavailable-title">
+          Commerce actions are not available in this deployment
+        </h1>
+        <p className="tenant-status tenant-status--warning" role="status">
+          The public action capability manifest does not enable the action console here. No action
+          request was made and no empty queue is implied.
+        </p>
+      </section>
+    );
+  }
+  if (!props.state.canRead) {
+    return <ActionNoAccess />;
+  }
+  return (
+    <div className="tenant-actions-console">
+      <p className="tenant-eyebrow">COMMERCE ACTIONS</p>
+      <h1 className="tenant-title">Actions and approvals</h1>
+      <p className="tenant-status tenant-status--warning" role="status">
+        This console reviews and decides pending commerce actions. It connects no wallet, signs
+        nothing, moves no money, and never reports a payment, settlement, delivery or purchase.
+      </p>
+      <ul className="tenant-actions-console__tabs">
+        <li>
+          <a
+            href="/app/actions"
+            aria-current={props.route.kind === "detail" || props.route.kind === "queue" ? "page" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              props.onNavigate("/app/actions");
+            }}
+          >
+            Action queue
+          </a>
+        </li>
+        <li>
+          <a
+            href="/app/actions/approvals"
+            aria-current={
+              props.route.kind === "approvals" || props.route.kind === "approval-detail"
+                ? "page"
+                : undefined
+            }
+            onClick={(event) => {
+              event.preventDefault();
+              props.onNavigate("/app/actions/approvals");
+            }}
+          >
+            Approval queue
+          </a>
+        </li>
+        <li>
+          <a
+            href="/app/actions/exposure"
+            aria-current={props.route.kind === "exposure" ? "page" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              props.onNavigate("/app/actions/exposure");
+            }}
+          >
+            Exposure
+          </a>
+        </li>
+      </ul>
+
+      {props.route.kind === "queue" ? (
+        <ActionQueuePanel
+          state={props.state}
+          controller={controller}
+          onOpenAction={props.onOpenAction}
+        />
+      ) : null}
+      {props.route.kind === "approvals" ? (
+        <ApprovalQueuePanel
+          state={props.state}
+          controller={controller}
+          onOpenApproval={props.onOpenApproval}
+          onOpenAction={props.onOpenAction}
+        />
+      ) : null}
+      {props.route.kind === "exposure" ? (
+        <ActionExposurePanel state={props.state} controller={controller} formKey={props.formKey} />
+      ) : null}
+      {props.route.kind === "detail" ? (
+        <ActionDetailPanel
+          state={props.state}
+          controller={controller}
+          actionId={props.route.actionId}
+          onBack={() => props.onNavigate("/app/actions")}
+          onOpenApproval={props.onOpenApproval}
+        />
+      ) : null}
+      {props.route.kind === "approval-detail" ? (
+        <>
+          <ActionDecisionView decision={props.state.decision} controller={controller} />
+          <ApprovalDetailPanel
+            state={props.state}
+            controller={controller}
+            approvalId={props.route.approvalId}
+            onBack={() => props.onNavigate("/app/actions/approvals")}
+            onOpenAction={props.onOpenAction}
+          />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function ActionNoAccess() {
+  return (
+    <section aria-labelledby="action-no-access-title">
+      <p className="tenant-eyebrow">NOT ALLOWED</p>
+      <h1 className="tenant-title" id="action-no-access-title">
+        You do not have access to commerce actions
+      </h1>
+      <p className="tenant-status tenant-status--warning" role="status">
+        Only a current owner, operator or viewer on a non-recovery account may read commerce
+        actions, and only an owner or operator may decide them. No request was made.
+      </p>
+      <div className="tenant-actions">
+        <a className="tenant-button" href="/app/overview">Back to overview</a>
+      </div>
+    </section>
+  );
+}
+
+function SessionNoAccess() {
+  return (
+    <section aria-labelledby="session-no-access-title">
+      <p className="tenant-eyebrow">NOT ALLOWED</p>
+      <h1 className="tenant-title" id="session-no-access-title">
+        You do not have access to commerce sessions
+      </h1>
+      <p className="tenant-status tenement-status--warning" role="status">
+        Only a current owner or operator on a non-recovery account may read or write commerce
+        sessions. Viewers, providers, unknown roles and recovery sign-in get no access. No request
+        was made and no readonly access is inferred.
+      </p>
+      <div className="tenant-actions">
+        <a className="tenant-button" href="/app/overview">Back to overview</a>
+      </div>
+    </section>
+  );
+}
+
+function PolicyDetailView(props: {
+  state: PolicyControllerState;
+  controller: PolicyController | null;
+  onNavigate: undefined;
+}) {
+  const detail = props.state.detail;
+  const controller = props.controller;
+  if (detail.status === "loading" || detail.status === "none") {
+    return <p className="tenant-status" role="status">Loading policy detail…</p>;
+  }
+  if (detail.status === "not-found") {
+    return (
+      <p className="tenant-status tenant-status--warning" role="status">
+        This policy was not found. No empty or fabricated policy is shown.
+      </p>
+    );
+  }
+  if (detail.status === "error") {
+    return (
+      <p className="tenant-status tenant-status--error" role="alert">
+        The policy detail could not be loaded.
+      </p>
+    );
+  }
+  const root = detail.root;
+  if (root === null) return null;
+  return (
+    <>
+      <section aria-labelledby="policy-root-title">
+        <h2 className="tenant-title tenant-title--small" id="policy-root-title">
+          Policy {root.policyId}
+        </h2>
+        <dl className="tenant-meta">
+          <dt>Subject agent</dt>
+          <dd className="tenant-mono">{root.subjectAgentId}</dd>
+          <dt>Status</dt>
+          <dd>{root.status}</dd>
+          <dt>Current revision (authoritative CAS root)</dt>
+          <dd className="tenant-mono">{root.currentRevision}</dd>
+          <dt>Updated</dt>
+          <dd className="tenant-mono">{root.updatedAt}</dd>
+        </dl>
+      </section>
+      <PolicyLifecycleActions state={props.state} controller={controller} />
+      <PolicyRevisionHistory
+        history={detail.history}
+        revision={props.state.revision}
+        canWrite={props.state.canWrite}
+        onLoadMore={() => void controller?.loadMoreRevisions()}
+        onReadRevision={(revision) => void controller?.readRevision(revision)}
+        onAppendFrom={() => {
+          const revision = props.state.revision.revision;
+          if (revision === null || controller === null) return;
+          beginAppendFromRevision(controller, revision);
+        }}
+      />
+    </>
+  );
+}
+
+function PolicyLifecycleActions(props: {
+  state: PolicyControllerState;
+  controller: PolicyController | null;
+}) {
+  const status = props.state.detail.root?.status;
+  if (status === undefined) return null;
+  return (
+    <div className="tenant-actions tenant-policies__lifecycle">
+      {status === "active" ? (
+        <button
+          type="button"
+          className="tenant-button"
+          disabled={!props.state.canWrite}
+          onClick={() => props.controller?.beginLifecycle("pause")}
+        >
+          Pause policy
+        </button>
+      ) : null}
+      {status === "paused" ? (
+        <button
+          type="button"
+          className="tenant-button tenant-button--primary"
+          disabled={!props.state.canWrite}
+          onClick={() => props.controller?.beginLifecycle("resume")}
+        >
+          Resume policy
+        </button>
+      ) : null}
+      {status !== "revoked" ? (
+        <button
+          type="button"
+          className="tenant-button"
+          disabled={!props.state.canWrite}
+          onClick={() => props.controller?.beginLifecycle("revoke")}
+        >
+          Revoke policy
+        </button>
+      ) : (
+        <p className="tenant-status">This policy is revoked and terminal.</p>
+      )}
+    </div>
+  );
+}
+
+function PolicyMutationStatusView(props: {
+  state: PolicyControllerState["mutation"];
+  controller: PolicyController | null;
+}) {
+  const mutation = props.state;
+  if (mutation.kind === "idle") return null;
+  if (mutation.kind === "confirming") {
+    const draft = mutation.draft;
+    const label =
+      draft.op === "create"
+        ? "Create policy"
+        : draft.op === "append"
+          ? `Append revision ${(BigInt(draft.cas.expectedRevision) + 1n).toString()}`
+          : `${draft.op === "pause" ? "Pause" : draft.op === "resume" ? "Resume" : "Revoke"} policy`;
+    return (
+      <section className="tenant-policies__disclosure" aria-labelledby="policy-confirm-title">
+        <h3 className="tenant-title tenant-title--small" id="policy-confirm-title">
+          Confirm: {label}
+        </h3>
+        <p className="tenant-status">
+          These are policy rules only. No funds are reserved, committed, moved, or executed here.
+          One explicit confirmation sends exactly one logical write with a fresh mutation id and an
+          idempotency key held in memory only. There is no automatic retry.
+        </p>
+        {draft.op === "append" || draft.op === "pause" || draft.op === "resume" || draft.op === "revoke" ? (
+          <p className="tenant-mono">
+            expectedRevision {draft.cas.expectedRevision} · expectedUpdatedAt {draft.cas.expectedUpdatedAt}
+          </p>
+        ) : null}
+        <div className="tenant-actions">
+          <button
+            type="button"
+            className="tenant-button tenant-button--primary"
+            onClick={() => void props.controller?.confirm()}
+          >
+            Confirm write
+          </button>
+          <button type="button" className="tenant-button" onClick={() => props.controller?.cancel()}>
+            Cancel
+          </button>
+        </div>
+      </section>
+    );
+  }
+  if (mutation.kind === "pending") {
+    return <p className="tenant-status" role="status">Sending the confirmed write…</p>;
+  }
+  if (mutation.kind === "committed") {
+    return (
+      <p className="tenant-status" role="status">
+        Committed operation {mutation.receipt.operation}
+        {mutation.resourceRevision === null ? "" : ` (revision ${mutation.resourceRevision})`}.
+        {mutation.refreshError ? " The follow-up refresh failed; the committed receipt stands." : ""}
+      </p>
+    );
+  }
+  if (mutation.kind === "rejected") {
+    const notice = mutation.notice;
+    return (
+      <p className="tenant-status tenant-status--error" role="alert">
+        {notice.kind === "conflict"
+          ? "A conflict was detected. Review the latest state and confirm explicitly again; no automatic retry was performed."
+          : notice.kind === "forbidden"
+            ? "Your role cannot perform this write."
+            : notice.kind === "unauthenticated"
+              ? "Your session needs re-authentication before this write."
+              : notice.kind === "csrf"
+                ? "The request origin or anti-forgery token was rejected."
+                : notice.kind === "not-found"
+                  ? "The target no longer exists."
+                  : notice.kind === "account-changed"
+                    ? "The account changed during the write; nothing was applied to the new account."
+                    : notice.kind === "capability-disabled"
+                      ? "Policy management is not enabled."
+                      : "The write was rejected. Review the values and confirm explicitly again."}
+      </p>
+    );
+  }
+  return (
+    <section aria-labelledby="policy-unknown-title">
+      <h3 className="tenant-title tenant-title--small" id="policy-unknown-title">
         The write outcome is unknown
       </h3>
       <p className="tenant-status tenant-status--warning" role="status">

@@ -98,6 +98,15 @@ export interface WorkerLoopOptions {
   readonly idleMaxMs: number;
   /** Bounded handler deadline. Must be an integer in 1..5000. */
   readonly handlerTimeoutMs?: number;
+  /**
+   * Bound on CONSECUTIVE claim failures before the loop stops instead of
+   * retrying forever. A claim failure is not always transient: a durable row
+   * the store cannot project fails the whole batch every time, which would
+   * otherwise spin at `idleMaxMs` indefinitely and silently stall the queue.
+   * Stopping surfaces the condition to the supervisor. Integer in 1..1000;
+   * defaults to 10. A single successful claim resets the counter.
+   */
+  readonly maxConsecutiveClaimErrors?: number;
   /** Bounded whole-batch deadline. Must be an integer in 1..20000. */
   readonly batchDeadlineMs?: number;
   readonly clock?: WorkerClock;
@@ -134,6 +143,7 @@ export class WorkerLoop {
   readonly #pollMs: number;
   readonly #idleMaxMs: number;
   readonly #handlerTimeoutMs: number;
+  readonly #maxConsecutiveClaimErrors: number;
   readonly #batchDeadlineMs: number;
   readonly #clock: WorkerClock;
   readonly #logger: WorkerLogger;
@@ -158,6 +168,15 @@ export class WorkerLoop {
     this.#claimLimit = options.claimLimit;
     this.#pollMs = options.pollMs;
     this.#idleMaxMs = options.idleMaxMs;
+    const claimErrorBound = options.maxConsecutiveClaimErrors ?? 10;
+    if (
+      !Number.isInteger(claimErrorBound) ||
+      claimErrorBound < 1 ||
+      claimErrorBound > 1000
+    ) {
+      throw new Error('maxConsecutiveClaimErrors must be an integer in 1..1000');
+    }
+    this.#maxConsecutiveClaimErrors = claimErrorBound;
     this.#handlerTimeoutMs = timeout;
     this.#batchDeadlineMs = batchDeadline;
     this.#clock = options.clock ?? systemClock;
@@ -188,17 +207,27 @@ export class WorkerLoop {
     if (this.#started) throw new InvalidEventError();
     this.#started = true;
     let backoffMs = this.#pollMs;
+    let consecutiveClaimErrors = 0;
     try {
       while (!this.#stopRequested) {
         let events: ClaimedOutboxEvent[];
         try {
           events = await this.#store.claim({ limit: this.#claimLimit });
         } catch {
+          consecutiveClaimErrors += 1;
           this.#logger.log({ status: 'claim_error', count: 1 });
+          if (consecutiveClaimErrors >= this.#maxConsecutiveClaimErrors) {
+            // Bounded: a permanently unprojectable row would otherwise stall the
+            // queue forever behind a silent retry. Stop and let the supervisor
+            // restart, so the condition is visible instead of invisible.
+            this.#logger.log({ status: 'stopping', count: consecutiveClaimErrors });
+            break;
+          }
           await this.#backoff(backoffMs);
           backoffMs = Math.min(backoffMs * 2, this.#idleMaxMs);
           continue;
         }
+        consecutiveClaimErrors = 0;
         if (this.#stopRequested) break;
         if (events.length === 0) {
           this.#logger.log({ status: 'claim_empty' });

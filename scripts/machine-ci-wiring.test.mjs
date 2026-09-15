@@ -114,7 +114,7 @@ test("workflow retains the manual trigger, pinned actions/images, read-only perm
   assert.match(workflow, /on:\s*\n\s*workflow_dispatch:/u);
   assert.match(workflow, /actions\/checkout@[0-9a-f]{40}/u);
   assert.match(workflow, /persist-credentials:\s*false/u);
-  assert.match(workflow, /timeout-minutes:\s*25\b/u);
+  assert.match(workflow, /timeout-minutes:\s*40\b/u);
   assert.match(workflow, /permissions:\s*\n\s*contents:\s*read/u);
   assert.ok(workflow.includes("node scripts/check-public-history.mjs"), "identity history guard must remain");
   assert.ok(workflow.includes("node --test scripts/check-public-history.test.mjs"), "identity guard tests must remain");

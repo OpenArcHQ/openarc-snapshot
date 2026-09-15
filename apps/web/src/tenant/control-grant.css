@@ -1,0 +1,178 @@
+/*
+ * Scoped control-grant styles.
+ *
+ * Everything is namespaced under `.tenant-grants-console`; there is no global
+ * reset and no inline style. Colours reuse the existing OpenArc blue/gold
+ * tenant tokens inherited from `.tenant-shell`, so this surface introduces no
+ * new visual language. Motion is opt-out under `prefers-reduced-motion`, focus
+ * is always visible, and error/live regions stay plain semantic elements.
+ *
+ * No rule here paints a "paid", "settled", "delivered" or "refunded" state,
+ * because no such state exists on this surface. The gold rule marks the two
+ * places a reader must slow down: the expiry block and the unknown outcome.
+ */
+
+.tenant-grants-console {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.tenant-grants-console .tenant-title--small {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.tenant-grants-console__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.tenant-grants-console__section {
+  border: 1px solid var(--tenant-line, #d7dde7);
+  border-radius: var(--tenant-radius, 10px);
+  background: var(--tenant-surface, #ffffff);
+  padding: 1rem;
+}
+
+.tenant-grants-console__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0 0 0.85rem;
+}
+
+.tenant-grants-console__field label {
+  font-weight: 600;
+}
+
+.tenant-grants-console__field input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--tenant-line-strong, #b9c2d1);
+  border-radius: var(--tenant-radius, 10px);
+  background: var(--tenant-surface, #ffffff);
+  color: var(--tenant-ink, #16233a);
+  min-width: 0;
+  width: 100%;
+  max-width: 34rem;
+}
+
+.tenant-grants-console__field input[aria-invalid="true"] {
+  border-color: var(--tenant-danger, #a12727);
+}
+
+.tenant-grants-console__hint {
+  color: var(--tenant-muted, #5a6780);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/*
+ * Expiry block. A grant lives at most 300 seconds, so the exact server instant
+ * and the instant it was compared against are always shown together; this
+ * console renders no countdown and no animated timer.
+ */
+.tenant-grants-console__expiry {
+  border: 1px solid var(--tenant-line, #d7dde7);
+  border-left: 3px solid var(--tenant-gold, #b07d1a);
+  border-radius: var(--tenant-radius, 10px);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.tenant-grants-console__confirm {
+  border: 1px solid var(--tenant-cobalt, #0f62fe);
+  border-radius: var(--tenant-radius, 10px);
+  padding: 1rem;
+  margin-block-start: 1rem;
+}
+
+/* The unknown outcome is marked, never coloured as success or failure. */
+.tenant-grants-console__unknown {
+  border: 1px solid var(--tenant-gold, #b07d1a);
+  border-radius: var(--tenant-radius, 10px);
+  padding: 1rem;
+  margin-block-start: 1rem;
+}
+
+.tenant-grants-console__receipt {
+  border: 1px solid var(--tenant-line-strong, #b9c2d1);
+  border-radius: var(--tenant-radius, 10px);
+  padding: 1rem;
+  margin-block-start: 1rem;
+}
+
+.tenant-grants-console__revoke {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-block-start: 1rem;
+  border-block-start: 1px solid var(--tenant-line, #d7dde7);
+  padding-block-start: 0.75rem;
+}
+
+/*
+ * The destructive control is visually distinct but never alarming: revoking
+ * retires permission and is fully described in the copy beside it.
+ */
+.tenant-grants-console .tenant-button--danger {
+  border-color: var(--tenant-danger, #a12727);
+  color: var(--tenant-danger, #a12727);
+  background: var(--tenant-surface, #ffffff);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.tenant-grants-console .tenant-button--danger:hover:not(:disabled),
+.tenant-grants-console .tenant-button--danger:focus-visible:not(:disabled) {
+  background: var(--tenant-danger-soft, #fdecec);
+}
+
+.tenant-grants-console .tenant-button--danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tenant-grants-console .tenant-meta dd {
+  word-break: break-all;
+}
+
+/* Keyboard users must always see where they are. */
+.tenant-grants-console a:focus-visible,
+.tenant-grants-console button:focus-visible,
+.tenant-grants-console input:focus-visible {
+  outline: 3px solid var(--tenant-cobalt, #0f62fe);
+  outline-offset: 2px;
+}
+
+/* Mobile width: stack every control so nothing overflows the viewport. */
+@media (max-width: 860px) {
+  .tenant-grants-console__head,
+  .tenant-grants-console__revoke,
+  .tenant-grants-console .tenant-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tenant-grants-console__field input {
+    max-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tenant-grants-console *,
+  .tenant-grants-console *::before,
+  .tenant-grants-console *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "openarc-e2e-session-production",
+  "private": true,
+  "type": "module"
+}

@@ -1,0 +1,234 @@
+/*
+ * Scoped control-action styles.
+ *
+ * Everything is namespaced under `.tenant-actions-console`; there is no global
+ * reset and no inline style. Colours reuse the existing OpenArc blue/gold
+ * tenant tokens inherited from `.tenant-shell`, so this surface introduces no
+ * new visual language. Motion is opt-out under `prefers-reduced-motion`, focus
+ * is always visible, and error/live regions stay plain semantic elements.
+ */
+
+.tenant-actions-console {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.tenant-actions-console .tenant-title--small {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.tenant-actions-console__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--tenant-line, #d7dde7);
+  padding-bottom: 0.5rem;
+  margin: 0;
+  list-style: none;
+}
+
+.tenant-actions-console__tabs a {
+  display: inline-block;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--tenant-radius, 10px);
+  border: 1px solid transparent;
+  color: var(--tenant-ink, #16233a);
+  text-decoration: none;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.tenant-actions-console__tabs a:hover,
+.tenant-actions-console__tabs a:focus-visible {
+  border-color: var(--tenant-cobalt, #0f62fe);
+  color: var(--tenant-cobalt, #0f62fe);
+}
+
+.tenant-actions-console__tabs a[aria-current="page"] {
+  border-color: var(--tenant-cobalt, #0f62fe);
+  box-shadow: inset 0 -3px 0 var(--tenant-gold, #b07d1a);
+  font-weight: 600;
+}
+
+.tenant-actions-console__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.tenant-actions-console__section {
+  border: 1px solid var(--tenant-line, #d7dde7);
+  border-radius: var(--tenant-radius, 10px);
+  background: var(--tenant-surface, #ffffff);
+  padding: 1rem;
+}
+
+.tenant-actions-console__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0 0 0.85rem;
+}
+
+.tenant-actions-console__field label {
+  font-weight: 600;
+}
+
+.tenant-actions-console__hint {
+  color: var(--tenant-muted, #5a6780);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* Exposure figures. Every value is shown exactly as the server sent it. */
+.tenant-actions-console__exposure {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  margin: 0;
+}
+
+.tenant-actions-console__exposure > div {
+  border: 1px solid var(--tenant-line, #d7dde7);
+  border-left: 3px solid var(--tenant-gold, #b07d1a);
+  border-radius: var(--tenant-radius, 10px);
+  padding: 0.75rem;
+}
+
+.tenant-actions-console__exposure dt {
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+.tenant-actions-console__exposure dd {
+  margin: 0;
+}
+
+.tenant-actions-console__amount {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.05rem;
+  word-break: break-all;
+}
+
+.tenant-actions-console__atomic {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--tenant-muted, #5a6780);
+  font-size: 0.85rem;
+  display: block;
+  word-break: break-all;
+}
+
+.tenant-actions-console__explain {
+  color: var(--tenant-muted, #5a6780);
+  font-size: 0.85rem;
+  margin: 0.35rem 0 0;
+}
+
+/* Status pills reuse the tenant pill shape; colours are informational only. */
+.tenant-actions-console .action-status {
+  white-space: nowrap;
+}
+
+.tenant-actions-console .action-status--pending_approval,
+.tenant-actions-console .action-status--pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.tenant-actions-console .action-status--reserved_not_granted,
+.tenant-actions-console .action-status--grant_issued,
+.tenant-actions-console .action-status--approved {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.tenant-actions-console .action-status--expired,
+.tenant-actions-console .action-status--cancelled {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.tenant-actions-console .action-status--rejected {
+  background: var(--tenant-danger-soft, #fdecec);
+  color: var(--tenant-danger, #a12727);
+}
+
+.tenant-actions-console__confirm {
+  border: 1px solid var(--tenant-cobalt, #0f62fe);
+  border-radius: var(--tenant-radius, 10px);
+  padding: 1rem;
+}
+
+.tenant-actions-console__unknown {
+  border: 1px solid var(--tenant-gold, #b07d1a);
+  border-radius: var(--tenant-radius, 10px);
+  padding: 1rem;
+}
+
+.tenant-actions-console__receipt {
+  border: 1px solid var(--tenant-line-strong, #b9c2d1);
+  border-radius: var(--tenant-radius, 10px);
+  padding: 1rem;
+}
+
+.tenant-actions-console__decisions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block-start: 1rem;
+  border-block-start: 1px solid var(--tenant-line, #d7dde7);
+  padding-block-start: 0.75rem;
+}
+
+.tenant-actions-console table td,
+.tenant-actions-console table th {
+  vertical-align: middle;
+}
+
+.tenant-actions-console__pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block-start: 0.75rem;
+}
+
+/* Keyboard users must always see where they are. */
+.tenant-actions-console a:focus-visible,
+.tenant-actions-console button:focus-visible,
+.tenant-actions-console input:focus-visible,
+.tenant-actions-console select:focus-visible {
+  outline: 3px solid var(--tenant-cobalt, #0f62fe);
+  outline-offset: 2px;
+}
+
+/* Mobile width: stack tables and controls so nothing overflows the viewport. */
+@media (max-width: 860px) {
+  .tenant-actions-console__table-scroll {
+    overflow-x: auto;
+  }
+
+  .tenant-actions-console__head,
+  .tenant-actions-console__decisions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tenant-actions-console__exposure {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tenant-actions-console *,
+  .tenant-actions-console *::before,
+  .tenant-actions-console *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

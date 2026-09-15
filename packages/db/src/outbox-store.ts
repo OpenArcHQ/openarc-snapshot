@@ -69,7 +69,11 @@ export type ClaimedOutboxEvent = {
   | { readonly resourceType: 'agent_credential'; readonly resourceId: string; readonly eventType: 'tenant.agent.credential.created' | 'tenant.agent.credential.revoked' }
   | { readonly resourceType: 'provider_credential'; readonly resourceId: string; readonly eventType: 'tenant.provider.credential.created' | 'tenant.provider.credential.revoked' }
   | { readonly resourceType: 'listing'; readonly resourceId: string; readonly eventType: 'market.listing.created' }
-  | { readonly resourceType: 'listing_version'; readonly resourceId: string; readonly eventType: 'market.listing.version.created' }
+  | { readonly resourceType: 'listing_version'; readonly resourceId: string; readonly eventType: 'market.listing.version.created' | 'market.listing.origin_review.recorded' | 'market.listing.version.published' | 'market.listing.version.paused' | 'market.listing.version.retired' }
+  | { readonly resourceType: 'budget_policy'; readonly resourceId: string; readonly eventType: 'control.policy.created' | 'control.policy.paused' | 'control.policy.resumed' | 'control.policy.revoked' }
+  | { readonly resourceType: 'budget_policy_revision'; readonly resourceId: string; readonly eventType: 'control.policy.revision.created' }
+  | { readonly resourceType: 'commerce_session'; readonly resourceId: string; readonly eventType: 'control.commerce_session.issued' | 'control.commerce_session.exchanged' | 'control.commerce_session.revoked' }
+  | { readonly resourceType: 'commerce_action'; readonly resourceId: string; readonly eventType: 'control.commerce_action.authorized' | 'control.commerce_action.approved' | 'control.commerce_action.rejected' | 'control.commerce_action.cancelled' }
 );
 
 const ORG_ID = /^openarc:org:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -86,6 +90,34 @@ const LISTING_VERSION_RESOURCE = /^openarc:listing:[0-9a-f]{8}-[0-9a-f]{4}-[1-8]
 function isListingVersionResource(value: string): boolean {
   return value.length <= LISTING_VERSION_RESOURCE_MAX_LENGTH && LISTING_VERSION_RESOURCE.test(value);
 }
+
+// Lifecycle resource: the same canonical listing id + '@' + version, but the
+// version may be 1. `market.listing.version.created` is only emitted for a
+// version >= 2 because creating version 1 is already reported by
+// `market.listing.created`, so that event alone excludes `@1`. Origin review,
+// publish, pause and retire all legitimately target a listing's FIRST version,
+// so reusing the stricter pattern here would reject a real event and fail the
+// whole claim batch closed.
+const LISTING_VERSION_LIFECYCLE_RESOURCE =
+  /^openarc:listing:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}@[1-9][0-9]{0,8}$(?![\s\S])/;
+
+function isListingVersionLifecycleResource(value: string): boolean {
+  return (
+    value.length <= LISTING_VERSION_RESOURCE_MAX_LENGTH &&
+    LISTING_VERSION_LIFECYCLE_RESOURCE.test(value)
+  );
+}
+
+const POLICY_ID = /^openarc:policy:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const POLICY_REVISION_RESOURCE_MAX_LENGTH = 160;
+const POLICY_REVISION_RESOURCE = /^openarc:policy:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}@(?!1$)[1-9][0-9]{0,8}$/;
+
+function isPolicyRevisionResource(value: string): boolean {
+  return value.length <= POLICY_REVISION_RESOURCE_MAX_LENGTH && POLICY_REVISION_RESOURCE.test(value);
+}
+
+const COMMERCE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const COMMERCE_ACTION_ID = /^openarc:action:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$(?![\s\S])/;
 
 export interface ClaimInput {
   readonly limit?: number;
@@ -346,6 +378,67 @@ export class OutboxStore {
       case 'listing_version|market.listing.version.created':
         if (!isListingVersionResource(resourceId)) fail('OUTBOX_STORE_UNAVAILABLE');
         return { ...base, resourceType: 'listing_version', resourceId, eventType: 'market.listing.version.created' };
+      case 'listing_version|market.listing.origin_review.recorded':
+      case 'listing_version|market.listing.version.published':
+      case 'listing_version|market.listing.version.paused':
+      case 'listing_version|market.listing.version.retired':
+        if (!isListingVersionLifecycleResource(resourceId)) fail('OUTBOX_STORE_UNAVAILABLE');
+        return {
+          ...base,
+          resourceType: 'listing_version',
+          resourceId,
+          eventType: eventType as
+            | 'market.listing.origin_review.recorded'
+            | 'market.listing.version.published'
+            | 'market.listing.version.paused'
+            | 'market.listing.version.retired',
+        };
+      case 'budget_policy|control.policy.created':
+      case 'budget_policy|control.policy.paused':
+      case 'budget_policy|control.policy.resumed':
+      case 'budget_policy|control.policy.revoked':
+        if (!POLICY_ID.test(resourceId)) fail('OUTBOX_STORE_UNAVAILABLE');
+        return {
+          ...base,
+          resourceType: 'budget_policy',
+          resourceId,
+          eventType: eventType as
+            | 'control.policy.created'
+            | 'control.policy.paused'
+            | 'control.policy.resumed'
+            | 'control.policy.revoked',
+        };
+      case 'budget_policy_revision|control.policy.revision.created':
+        if (!isPolicyRevisionResource(resourceId)) fail('OUTBOX_STORE_UNAVAILABLE');
+        return { ...base, resourceType: 'budget_policy_revision', resourceId, eventType: 'control.policy.revision.created' };
+      case 'commerce_session|control.commerce_session.issued':
+      case 'commerce_session|control.commerce_session.exchanged':
+      case 'commerce_session|control.commerce_session.revoked':
+        if (!COMMERCE_SESSION_ID.test(resourceId)) fail('OUTBOX_STORE_UNAVAILABLE');
+        return {
+          ...base,
+          resourceType: 'commerce_session',
+          resourceId,
+          eventType: eventType as
+            | 'control.commerce_session.issued'
+            | 'control.commerce_session.exchanged'
+            | 'control.commerce_session.revoked',
+        };
+      case 'commerce_action|control.commerce_action.authorized':
+      case 'commerce_action|control.commerce_action.approved':
+      case 'commerce_action|control.commerce_action.rejected':
+      case 'commerce_action|control.commerce_action.cancelled':
+        if (!COMMERCE_ACTION_ID.test(resourceId)) fail('OUTBOX_STORE_UNAVAILABLE');
+        return {
+          ...base,
+          resourceType: 'commerce_action',
+          resourceId,
+          eventType: eventType as
+            | 'control.commerce_action.authorized'
+            | 'control.commerce_action.approved'
+            | 'control.commerce_action.rejected'
+            | 'control.commerce_action.cancelled',
+        };
       default:
         fail('OUTBOX_STORE_UNAVAILABLE');
     }

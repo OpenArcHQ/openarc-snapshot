@@ -54,6 +54,22 @@ ARG VITE_MACHINE_CREDENTIAL_MANAGEMENT_ENABLED=false
 ENV VITE_MACHINE_CREDENTIAL_MANAGEMENT_ENABLED=${VITE_MACHINE_CREDENTIAL_MANAGEMENT_ENABLED}
 RUN case "${VITE_MACHINE_CREDENTIAL_MANAGEMENT_ENABLED}" in true|false) ;; *) echo 'VITE_MACHINE_CREDENTIAL_MANAGEMENT_ENABLED must be exactly true or false' >&2; exit 1 ;; esac
 RUN if [ "${VITE_MACHINE_CREDENTIAL_MANAGEMENT_ENABLED}" = "true" ] && { [ "${VITE_TENANT_WRITES_ENABLED}" != "true" ] || [ "${VITE_TENANT_READS_ENABLED}" != "true" ] || [ "${VITE_ACCOUNT_ACCESS_ENABLED}" != "true" ] || [ "${VITE_API_BOUNDARY_ENABLED}" != "true" ]; }; then echo 'VITE_MACHINE_CREDENTIAL_MANAGEMENT_ENABLED=true requires VITE_TENANT_WRITES_ENABLED=true, VITE_TENANT_READS_ENABLED=true, VITE_ACCOUNT_ACCESS_ENABLED=true and VITE_API_BOUNDARY_ENABLED=true' >&2; exit 1; fi
+ARG VITE_POLICY_MANAGEMENT_ENABLED=false
+ENV VITE_POLICY_MANAGEMENT_ENABLED=${VITE_POLICY_MANAGEMENT_ENABLED}
+RUN case "${VITE_POLICY_MANAGEMENT_ENABLED}" in true|false) ;; *) echo 'VITE_POLICY_MANAGEMENT_ENABLED must be exactly true or false' >&2; exit 1 ;; esac
+RUN if [ "${VITE_POLICY_MANAGEMENT_ENABLED}" = "true" ] && { [ "${VITE_ACCOUNT_ACCESS_ENABLED}" != "true" ] || [ "${VITE_API_BOUNDARY_ENABLED}" != "true" ]; }; then echo 'VITE_POLICY_MANAGEMENT_ENABLED=true requires VITE_ACCOUNT_ACCESS_ENABLED=true and VITE_API_BOUNDARY_ENABLED=true' >&2; exit 1; fi
+ARG VITE_COMMERCE_SESSIONS_ENABLED=false
+ENV VITE_COMMERCE_SESSIONS_ENABLED=${VITE_COMMERCE_SESSIONS_ENABLED}
+RUN case "${VITE_COMMERCE_SESSIONS_ENABLED}" in true|false) ;; *) echo 'VITE_COMMERCE_SESSIONS_ENABLED must be exactly true or false' >&2; exit 1 ;; esac
+RUN if [ "${VITE_COMMERCE_SESSIONS_ENABLED}" = "true" ] && { [ "${VITE_ACCOUNT_ACCESS_ENABLED}" != "true" ] || [ "${VITE_API_BOUNDARY_ENABLED}" != "true" ]; }; then echo 'VITE_COMMERCE_SESSIONS_ENABLED=true requires VITE_ACCOUNT_ACCESS_ENABLED=true and VITE_API_BOUNDARY_ENABLED=true' >&2; exit 1; fi
+ARG VITE_COMMERCE_ACTIONS_ENABLED=false
+ENV VITE_COMMERCE_ACTIONS_ENABLED=${VITE_COMMERCE_ACTIONS_ENABLED}
+RUN case "${VITE_COMMERCE_ACTIONS_ENABLED}" in true|false) ;; *) echo 'VITE_COMMERCE_ACTIONS_ENABLED must be exactly true or false' >&2; exit 1 ;; esac
+RUN if [ "${VITE_COMMERCE_ACTIONS_ENABLED}" = "true" ] && { [ "${VITE_COMMERCE_SESSIONS_ENABLED}" != "true" ] || [ "${VITE_TENANT_READS_ENABLED}" != "true" ] || [ "${VITE_ACCOUNT_ACCESS_ENABLED}" != "true" ] || [ "${VITE_API_BOUNDARY_ENABLED}" != "true" ]; }; then echo 'VITE_COMMERCE_ACTIONS_ENABLED=true requires VITE_COMMERCE_SESSIONS_ENABLED=true, VITE_TENANT_READS_ENABLED=true, VITE_ACCOUNT_ACCESS_ENABLED=true and VITE_API_BOUNDARY_ENABLED=true' >&2; exit 1; fi
+ARG VITE_COMMERCE_GRANTS_ENABLED=false
+ENV VITE_COMMERCE_GRANTS_ENABLED=${VITE_COMMERCE_GRANTS_ENABLED}
+RUN case "${VITE_COMMERCE_GRANTS_ENABLED}" in true|false) ;; *) echo 'VITE_COMMERCE_GRANTS_ENABLED must be exactly true or false' >&2; exit 1 ;; esac
+RUN if [ "${VITE_COMMERCE_GRANTS_ENABLED}" = "true" ] && { [ "${VITE_COMMERCE_ACTIONS_ENABLED}" != "true" ] || [ "${VITE_COMMERCE_SESSIONS_ENABLED}" != "true" ] || [ "${VITE_TENANT_READS_ENABLED}" != "true" ] || [ "${VITE_ACCOUNT_ACCESS_ENABLED}" != "true" ] || [ "${VITE_API_BOUNDARY_ENABLED}" != "true" ]; }; then echo 'VITE_COMMERCE_GRANTS_ENABLED=true requires VITE_COMMERCE_ACTIONS_ENABLED=true, VITE_COMMERCE_SESSIONS_ENABLED=true, VITE_TENANT_READS_ENABLED=true, VITE_ACCOUNT_ACCESS_ENABLED=true and VITE_API_BOUNDARY_ENABLED=true' >&2; exit 1; fi
 RUN if [ "${VITE_GENERIC_AGENT_IMPORT_ENABLED}" = "true" ] && [ "${VITE_ENCRYPTED_WORKSPACE_ENABLED}" != "true" ]; then exit 1; fi
 RUN if [ "${VITE_GATEWAY_EVIDENCE_ENABLED}" = "true" ] && [ "${VITE_AGENT_JOBS_ENABLED}" != "true" ]; then exit 1; fi
 RUN if [ "${VITE_AGENT_JOBS_ENABLED}" = "true" ] && [ "${VITE_AGENT_REGISTRY_ENABLED}" != "true" ]; then exit 1; fi
@@ -92,10 +108,16 @@ ARG VITE_ACCOUNT_ACCESS_ENABLED=false
 ARG VITE_TENANT_READS_ENABLED=false
 ARG VITE_TENANT_WRITES_ENABLED=false
 ARG VITE_MACHINE_CREDENTIAL_MANAGEMENT_ENABLED=false
+ARG VITE_POLICY_MANAGEMENT_ENABLED=false
+ARG VITE_COMMERCE_SESSIONS_ENABLED=false
+ARG VITE_COMMERCE_ACTIONS_ENABLED=false
+ARG VITE_COMMERCE_GRANTS_ENABLED=false
 ARG VITE_MARKET_CATALOG_ENABLED=false
 ARG VITE_LISTING_MANAGEMENT_ENABLED=false
 ARG VITE_MARKET_MODERATION_ENABLED=false
-COPY apps/web/nginx.conf apps/web/nginx-api.conf apps/web/nginx-arc.conf apps/web/proxy_params apps/web/auth_proxy_params apps/web/tenant_proxy_params apps/web/tenant_write_proxy_params apps/web/nginx-account-locations.conf apps/web/nginx-account-disabled.conf apps/web/nginx-tenant-locations.conf apps/web/nginx-tenant-write-locations.conf apps/web/nginx-tenant-disabled.conf apps/web/nginx-machine-management-locations.conf apps/web/nginx-machine-management-disabled.conf apps/web/validate-m04-runtime-env.sh /tmp/openarc-nginx/
+COPY apps/web/nginx.conf apps/web/nginx-api.conf apps/web/nginx-arc.conf apps/web/proxy_params apps/web/auth_proxy_params apps/web/tenant_proxy_params apps/web/tenant_write_proxy_params apps/web/commerce_agent_proxy_params apps/web/nginx-account-locations.conf apps/web/nginx-account-disabled.conf apps/web/nginx-tenant-locations.conf apps/web/nginx-tenant-write-locations.conf apps/web/nginx-tenant-disabled.conf apps/web/nginx-machine-management-locations.conf apps/web/nginx-machine-management-disabled.conf apps/web/nginx-control-capability.conf apps/web/nginx-control-deny.conf apps/web/nginx-policy-management-locations.conf apps/web/nginx-commerce-session-locations.conf apps/web/nginx-session-capability.conf apps/web/nginx-session-deny.conf apps/web/validate-m04-runtime-env.sh /tmp/openarc-nginx/
+COPY apps/web/nginx-action-capability.conf apps/web/nginx-action-locations.conf apps/web/nginx-action-deny.conf /tmp/openarc-nginx/
+COPY apps/web/nginx-grant-capability.conf apps/web/nginx-grant-locations.conf apps/web/nginx-grant-deny.conf /tmp/openarc-nginx/
 COPY apps/web/nginx-market-capability.conf apps/web/nginx-market-catalog-locations.conf apps/web/nginx-listing-management-locations.conf apps/web/nginx-market-moderation-locations.conf apps/web/nginx-market-deny.conf apps/web/market_public_proxy_params apps/web/market_response_headers /tmp/openarc-nginx/
 RUN set -eu; \
     case "${VITE_ACCOUNT_ACCESS_ENABLED}" in true|false) ;; *) echo 'VITE_ACCOUNT_ACCESS_ENABLED must be exactly true or false' >&2; exit 1 ;; esac; \
@@ -106,6 +128,14 @@ RUN set -eu; \
     if [ "${VITE_TENANT_WRITES_ENABLED}" = "true" ] && { [ "${VITE_TENANT_READS_ENABLED}" != "true" ] || [ "${VITE_ACCOUNT_ACCESS_ENABLED}" != "true" ] || [ "${VITE_API_BOUNDARY_ENABLED}" != "true" ]; }; then echo 'VITE_TENANT_WRITES_ENABLED=true requires VITE_TENANT_READS_ENABLED=true, VITE_ACCOUNT_ACCESS_ENABLED=true and VITE_API_BOUNDARY_ENABLED=true' >&2; exit 1; fi; \
     case "${VITE_MACHINE_CREDENTIAL_MANAGEMENT_ENABLED}" in true|false) ;; *) echo 'VITE_MACHINE_CREDENTIAL_MANAGEMENT_ENABLED must be exactly true or false' >&2; exit 1 ;; esac; \
     if [ "${VITE_MACHINE_CREDENTIAL_MANAGEMENT_ENABLED}" = "true" ] && { [ "${VITE_TENANT_WRITES_ENABLED}" != "true" ] || [ "${VITE_TENANT_READS_ENABLED}" != "true" ] || [ "${VITE_ACCOUNT_ACCESS_ENABLED}" != "true" ] || [ "${VITE_API_BOUNDARY_ENABLED}" != "true" ]; }; then echo 'VITE_MACHINE_CREDENTIAL_MANAGEMENT_ENABLED=true requires VITE_TENANT_WRITES_ENABLED=true, VITE_TENANT_READS_ENABLED=true, VITE_ACCOUNT_ACCESS_ENABLED=true and VITE_API_BOUNDARY_ENABLED=true' >&2; exit 1; fi; \
+    case "${VITE_POLICY_MANAGEMENT_ENABLED}" in true|false) ;; *) echo 'VITE_POLICY_MANAGEMENT_ENABLED must be exactly true or false' >&2; exit 1 ;; esac; \
+    if [ "${VITE_POLICY_MANAGEMENT_ENABLED}" = "true" ] && { [ "${VITE_ACCOUNT_ACCESS_ENABLED}" != "true" ] || [ "${VITE_API_BOUNDARY_ENABLED}" != "true" ]; }; then echo 'VITE_POLICY_MANAGEMENT_ENABLED=true requires VITE_ACCOUNT_ACCESS_ENABLED=true and VITE_API_BOUNDARY_ENABLED=true' >&2; exit 1; fi; \
+    case "${VITE_COMMERCE_SESSIONS_ENABLED}" in true|false) ;; *) echo 'VITE_COMMERCE_SESSIONS_ENABLED must be exactly true or false' >&2; exit 1 ;; esac; \
+    if [ "${VITE_COMMERCE_SESSIONS_ENABLED}" = "true" ] && { [ "${VITE_ACCOUNT_ACCESS_ENABLED}" != "true" ] || [ "${VITE_API_BOUNDARY_ENABLED}" != "true" ]; }; then echo 'VITE_COMMERCE_SESSIONS_ENABLED=true requires VITE_ACCOUNT_ACCESS_ENABLED=true and VITE_API_BOUNDARY_ENABLED=true' >&2; exit 1; fi; \
+    case "${VITE_COMMERCE_ACTIONS_ENABLED}" in true|false) ;; *) echo 'VITE_COMMERCE_ACTIONS_ENABLED must be exactly true or false' >&2; exit 1 ;; esac; \
+    if [ "${VITE_COMMERCE_ACTIONS_ENABLED}" = "true" ] && { [ "${VITE_COMMERCE_SESSIONS_ENABLED}" != "true" ] || [ "${VITE_TENANT_READS_ENABLED}" != "true" ] || [ "${VITE_ACCOUNT_ACCESS_ENABLED}" != "true" ] || [ "${VITE_API_BOUNDARY_ENABLED}" != "true" ]; }; then echo 'VITE_COMMERCE_ACTIONS_ENABLED=true requires VITE_COMMERCE_SESSIONS_ENABLED=true, VITE_TENANT_READS_ENABLED=true, VITE_ACCOUNT_ACCESS_ENABLED=true and VITE_API_BOUNDARY_ENABLED=true' >&2; exit 1; fi; \
+    case "${VITE_COMMERCE_GRANTS_ENABLED}" in true|false) ;; *) echo 'VITE_COMMERCE_GRANTS_ENABLED must be exactly true or false' >&2; exit 1 ;; esac; \
+    if [ "${VITE_COMMERCE_GRANTS_ENABLED}" = "true" ] && { [ "${VITE_COMMERCE_ACTIONS_ENABLED}" != "true" ] || [ "${VITE_COMMERCE_SESSIONS_ENABLED}" != "true" ] || [ "${VITE_TENANT_READS_ENABLED}" != "true" ] || [ "${VITE_ACCOUNT_ACCESS_ENABLED}" != "true" ] || [ "${VITE_API_BOUNDARY_ENABLED}" != "true" ]; }; then echo 'VITE_COMMERCE_GRANTS_ENABLED=true requires VITE_COMMERCE_ACTIONS_ENABLED=true, VITE_COMMERCE_SESSIONS_ENABLED=true, VITE_TENANT_READS_ENABLED=true, VITE_ACCOUNT_ACCESS_ENABLED=true and VITE_API_BOUNDARY_ENABLED=true' >&2; exit 1; fi; \
     case "${VITE_MARKET_CATALOG_ENABLED}" in true|false) ;; *) echo 'VITE_MARKET_CATALOG_ENABLED must be exactly true or false' >&2; exit 1 ;; esac; \
     if [ "${VITE_MARKET_CATALOG_ENABLED}" = "true" ] && [ "${VITE_API_BOUNDARY_ENABLED}" != "true" ]; then echo 'VITE_MARKET_CATALOG_ENABLED=true requires VITE_API_BOUNDARY_ENABLED=true' >&2; exit 1; fi; \
     case "${VITE_LISTING_MANAGEMENT_ENABLED}" in true|false) ;; *) echo 'VITE_LISTING_MANAGEMENT_ENABLED must be exactly true or false' >&2; exit 1 ;; esac; \
@@ -147,6 +177,45 @@ RUN set -eu; \
         cp /tmp/openarc-nginx/nginx-machine-management-locations.conf /etc/nginx/templates/openarc-machine-locations.inc.template; \
       else \
         cp /tmp/openarc-nginx/nginx-machine-management-disabled.conf /etc/nginx/templates/openarc-machine-locations.inc.template; \
+      fi; \
+      cp /tmp/openarc-nginx/nginx-control-capability.conf /etc/nginx/templates/openarc-control-capability-locations.inc.template; \
+      cp /tmp/openarc-nginx/nginx-control-deny.conf /etc/nginx/templates/openarc-control-deny.inc.template; \
+      cp /tmp/openarc-nginx/nginx-session-capability.conf /etc/nginx/templates/openarc-session-capability-locations.inc.template; \
+      cp /tmp/openarc-nginx/nginx-session-deny.conf /etc/nginx/templates/openarc-session-deny.inc.template; \
+      if [ "${VITE_POLICY_MANAGEMENT_ENABLED}" = "true" ]; then \
+        cp /tmp/openarc-nginx/nginx-policy-management-locations.conf /etc/nginx/templates/openarc-policy-management-locations.inc.template; \
+        cp /tmp/openarc-nginx/tenant_proxy_params /etc/nginx/tenant_proxy_params; \
+        cp /tmp/openarc-nginx/tenant_write_proxy_params /etc/nginx/tenant_write_proxy_params; \
+      else \
+        : > /etc/nginx/templates/openarc-policy-management-locations.inc.template; \
+      fi; \
+      if [ "${VITE_COMMERCE_SESSIONS_ENABLED}" = "true" ]; then \
+        cp /tmp/openarc-nginx/nginx-commerce-session-locations.conf /etc/nginx/templates/openarc-commerce-session-locations.inc.template; \
+        cp /tmp/openarc-nginx/tenant_proxy_params /etc/nginx/tenant_proxy_params; \
+        cp /tmp/openarc-nginx/tenant_write_proxy_params /etc/nginx/tenant_write_proxy_params; \
+        cp /tmp/openarc-nginx/commerce_agent_proxy_params /etc/nginx/commerce_agent_proxy_params; \
+      else \
+        : > /etc/nginx/templates/openarc-commerce-session-locations.inc.template; \
+      fi; \
+      cp /tmp/openarc-nginx/nginx-action-capability.conf /etc/nginx/templates/openarc-action-capability-locations.inc.template; \
+      cp /tmp/openarc-nginx/nginx-action-deny.conf /etc/nginx/templates/openarc-action-deny.inc.template; \
+      if [ "${VITE_COMMERCE_ACTIONS_ENABLED}" = "true" ]; then \
+        cp /tmp/openarc-nginx/nginx-action-locations.conf /etc/nginx/templates/openarc-commerce-action-locations.inc.template; \
+        cp /tmp/openarc-nginx/tenant_proxy_params /etc/nginx/tenant_proxy_params; \
+        cp /tmp/openarc-nginx/tenant_write_proxy_params /etc/nginx/tenant_write_proxy_params; \
+        cp /tmp/openarc-nginx/commerce_agent_proxy_params /etc/nginx/commerce_agent_proxy_params; \
+      else \
+        : > /etc/nginx/templates/openarc-commerce-action-locations.inc.template; \
+      fi; \
+      cp /tmp/openarc-nginx/nginx-grant-capability.conf /etc/nginx/templates/openarc-grant-capability-locations.inc.template; \
+      cp /tmp/openarc-nginx/nginx-grant-deny.conf /etc/nginx/templates/openarc-grant-deny.inc.template; \
+      if [ "${VITE_COMMERCE_GRANTS_ENABLED}" = "true" ]; then \
+        cp /tmp/openarc-nginx/nginx-grant-locations.conf /etc/nginx/templates/openarc-commerce-grant-locations.inc.template; \
+        cp /tmp/openarc-nginx/tenant_proxy_params /etc/nginx/tenant_proxy_params; \
+        cp /tmp/openarc-nginx/tenant_write_proxy_params /etc/nginx/tenant_write_proxy_params; \
+        cp /tmp/openarc-nginx/commerce_agent_proxy_params /etc/nginx/commerce_agent_proxy_params; \
+      else \
+        : > /etc/nginx/templates/openarc-commerce-grant-locations.inc.template; \
       fi; \
       cp /tmp/openarc-nginx/nginx-market-capability.conf /etc/nginx/templates/openarc-market-capability-locations.inc.template; \
       cp /tmp/openarc-nginx/nginx-market-deny.conf /etc/nginx/templates/openarc-market-deny.inc.template; \

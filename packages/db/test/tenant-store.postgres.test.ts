@@ -212,6 +212,13 @@ describe('tenant migration and schema2 boundary', () => {
       '0005_machine_credentials',
       '0006_market',
       '0007_market_lifecycle',
+      '0008_control_policies',
+      '0009_control_sessions',
+      '0010_control_actions',
+      '0011_control_action_reads',
+      '0012_authorization_grants',
+      '0013_commerce_session_reads',
+      '0014_grant_mutation_reads',
     ]);
     expect(applied.rows[1]?.checksum).toBe(checksum);
   });
@@ -240,6 +247,8 @@ describe('tenant migration and schema2 boundary', () => {
     );
     expect(rls.rows.map((row) => row.relname)).toEqual([
       'agents',
+      'budget_policy_roots',
+      'budget_policy_versions',
       'listing_origin_reviews',
       'listing_version_states',
       'listing_versions',

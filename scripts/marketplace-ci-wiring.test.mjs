@@ -169,7 +169,7 @@ test("workflow keeps a single manual, pinned, read-only, isolated and honestly b
     !/^\s{2}(?:push|pull_request|schedule|repository_dispatch):/mu.test(workflow),
     "no extra pipeline trigger may be added",
   );
-  assert.match(workflow, /timeout-minutes:\s*25\b/u);
+  assert.match(workflow, /timeout-minutes:\s*40\b/u);
   assert.match(workflow, /actions\/checkout@[0-9a-f]{40}/u);
   assert.match(workflow, /persist-credentials:\s*false/u);
   assert.match(workflow, /permissions:\s*\n\s*contents:\s*read/u);

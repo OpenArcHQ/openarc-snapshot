@@ -15,8 +15,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run test/migrations.test.ts test/client.test.ts test/migrate-mocks.test.ts test/tenant-contract.test.ts test/tenant-repository.test.ts test/durability.test.ts test/tenant-mutations.test.ts test/credential-store.test.ts test/market-store.test.ts test/market-lifecycle-store.test.ts test/market-catalog-store.test.ts",
-    "test:postgres": "vitest run --no-file-parallelism test/postgres.test.ts test/postgres-boundaries.test.ts test/auth-store.postgres.test.ts test/tenant-store.postgres.test.ts test/tenant-repository.postgres.test.ts test/durability.postgres.test.ts test/tenant-mutations.postgres.test.ts test/credential-store.postgres.test.ts test/market-store.postgres.test.ts test/market-lifecycle-store.postgres.test.ts"
+    "test": "vitest run test/migrations.test.ts test/client.test.ts test/migrate-mocks.test.ts test/tenant-contract.test.ts test/tenant-repository.test.ts test/durability.test.ts test/tenant-mutations.test.ts test/credential-store.test.ts test/market-store.test.ts test/market-lifecycle-store.test.ts test/market-catalog-store.test.ts test/control-policy-store.test.ts test/control-session-store.test.ts test/control-action-store.test.ts test/control-action-read-store.test.ts test/control-grant-store.test.ts",
+    "test:postgres": "vitest run --no-file-parallelism test/postgres.test.ts test/postgres-boundaries.test.ts test/auth-store.postgres.test.ts test/tenant-store.postgres.test.ts test/tenant-repository.postgres.test.ts test/durability.postgres.test.ts test/tenant-mutations.postgres.test.ts test/credential-store.postgres.test.ts test/market-store.postgres.test.ts test/market-lifecycle-store.postgres.test.ts test/control-policy-store.postgres.test.ts test/control-session-store.postgres.test.ts test/control-action-store.postgres.test.ts test/control-action-read-store.postgres.test.ts test/control-grant-store.postgres.test.ts test/control-adversarial.postgres.test.ts"
   },
   "dependencies": {
     "@openarc/shared": "workspace:*",

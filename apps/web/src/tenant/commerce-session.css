@@ -1,0 +1,126 @@
+/*
+ * Scoped commerce-session stylesheet.
+ *
+ * Every rule is scoped under `.tenant-shell` so the surface inherits the
+ * supplied workspace conventions and cannot leak into other pages. It uses only
+ * the existing design tokens/classes and adds session-specific layout. It is
+ * mounted for the feature lifetime only and removed on cleanup.
+ */
+
+.tenant-shell .session-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.tenant-shell .session-title--small {
+  font-size: 1rem;
+  margin: 0.5rem 0 0.35rem;
+}
+
+.tenant-shell .session-list,
+.tenant-shell .session-issue,
+.tenant-shell .session-detail,
+.tenant-shell .session-confirm,
+.tenant-shell .session-receipt {
+  margin-block: 1rem;
+}
+
+.tenant-shell .session-list__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tenant-shell .session-form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 40rem;
+}
+
+.tenant-shell .session-table td,
+.tenant-shell .session-table th {
+  vertical-align: middle;
+}
+
+.tenant-shell .session-status {
+  white-space: nowrap;
+}
+
+.tenant-shell .session-status--handoff_pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.tenant-shell .session-status--active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.tenant-shell .session-status--expired,
+.tenant-shell .session-status--invalidated {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.tenant-shell .session-status--revoked {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.tenant-shell .session-secret {
+  display: grid;
+  gap: 0.5rem;
+  border: 1px solid #f59e0b;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  margin-block: 0.5rem;
+}
+
+.tenant-shell .session-secret__value {
+  width: 100%;
+}
+
+.tenant-shell .session-detail__revoke {
+  margin-block-start: 1rem;
+  border-block-start: 1px solid rgba(0, 0, 0, 0.1);
+  padding-block-start: 0.75rem;
+}
+
+.tenant-shell .session-lifecycle {
+  margin-block: 1rem;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.tenant-shell .session-lifecycle__steps {
+  margin: 0.5rem 0 0.25rem;
+  padding-inline-start: 1.25rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+/* Mobile width: stack tables and controls so nothing overflows the viewport. */
+@media (max-width: 860px) {
+  .tenant-shell .session-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .tenant-shell .session-list__head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tenant-shell .session-form {
+    max-width: 100%;
+  }
+
+  .tenant-shell .session-secret .tenant-actions {
+    flex-direction: column;
+  }
+}

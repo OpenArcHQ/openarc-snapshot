@@ -13,7 +13,7 @@ concurrency:
 jobs:
   source-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,7 +28,7 @@ jobs:
       - name: Run account, tenant, tenant-write, worker, machine, marketplace and public capability deployment tests in the built gate image
         run: |
           docker run --rm openarc-public-source-gate \
-            node --test scripts/account-deployment.test.mjs scripts/tenant-deployment.test.mjs scripts/tenant-write-deployment.test.mjs scripts/tenant-ci-wiring.test.mjs scripts/worker-ci-wiring.test.mjs scripts/machine-deployment.test.mjs scripts/machine-ci-wiring.test.mjs scripts/capability-deployment.test.mjs scripts/marketplace-deployment.test.mjs scripts/marketplace-ci-wiring.test.mjs
+            node --test scripts/account-deployment.test.mjs scripts/tenant-deployment.test.mjs scripts/tenant-write-deployment.test.mjs scripts/tenant-ci-wiring.test.mjs scripts/worker-ci-wiring.test.mjs scripts/machine-deployment.test.mjs scripts/machine-ci-wiring.test.mjs scripts/capability-deployment.test.mjs scripts/marketplace-deployment.test.mjs scripts/marketplace-ci-wiring.test.mjs scripts/control-deployment.test.mjs scripts/session-deployment.test.mjs scripts/action-deployment.test.mjs scripts/grant-deployment.test.mjs scripts/api-namespace-deployment.test.mjs
       - name: Run real PostgreSQL database tests
         run: |
           set -euo pipefail

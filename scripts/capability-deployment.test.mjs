@@ -142,10 +142,24 @@ test("the public capability route is never a wildcard or prefix", () => {
     [FILES.arcConf, arcLocations, arcStripped],
   ]) {
     for (const entry of locations) {
-      if (entry.path.includes("/v2")) {
-        assert.equal(entry.modifier, "=", `${template} ${entry.raw} must be an exact match`);
-        assert.equal(entry.path, PUBLIC_PATH, `${template} must not widen /v2`);
+      if (!entry.path.includes("/v2")) continue;
+      // A non-proxying fail-closed deny is allowed and required: the API
+      // namespace guards keep unrouted /v2 paths off the SPA fallback. They
+      // carry no upstream, so they cannot widen what is forwarded.
+      if (!entry.body.includes("proxy_pass")) {
+        assert.match(
+          entry.body.trim(),
+          /^return 404;$/u,
+          `${template} ${entry.raw} must either proxy the exact capability route or deny`,
+        );
+        assert.ok(
+          !entry.modifier.includes("^~"),
+          `${template} ${entry.raw} must not suppress the exact capability route`,
+        );
+        continue;
       }
+      assert.equal(entry.modifier, "=", `${template} ${entry.raw} must be an exact match`);
+      assert.equal(entry.path, PUBLIC_PATH, `${template} must not widen /v2`);
     }
     assert.ok(!/location[^\n]*\/v2\/[^\n]*\*/u.test(source), `${template} must not wildcard /v2`);
   }
