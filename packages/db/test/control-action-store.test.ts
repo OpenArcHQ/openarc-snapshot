@@ -366,6 +366,71 @@ describe('OutboxStore listing_version lifecycle claim boundary', () => {
   });
 });
 
+/**
+ * Regression for a queue-blocking defect: schema12 emits four
+ * authorization_grant events, but the claim projection had no case for them
+ * and fell through to the fixed UNAVAILABLE error, failing the WHOLE batch.
+ */
+describe('OutboxStore authorization_grant claim boundary', () => {
+  const EVENT = '00000000-0000-4000-8000-0000000000d1';
+  const MUTATION = '00000000-0000-4000-8000-0000000000d2';
+  const ORG = 'openarc:org:00000000-0000-4000-8000-0000000000d3';
+  const GRANT = 'openarc:grant:00000000-0000-4000-8000-0000000000d4';
+
+  const GRANT_EVENTS = [
+    'control.grant.issued',
+    'control.grant.replaced',
+    'control.grant.revoked',
+    'control.grant.claimed',
+  ] as const;
+
+  function grantRow(resourceId: string, eventType: string, resourceType = 'authorization_grant'): Row {
+    return {
+      event_id: EVENT,
+      organization_id: ORG,
+      mutation_id: MUTATION,
+      resource_type: resourceType,
+      resource_id: resourceId,
+      event_type: eventType,
+      payload_version: 1,
+      lease_generation: '1',
+      lease_until: new Date('2026-09-15T10:00:30.000Z'),
+      attempt_count: 0,
+    };
+  }
+
+  it('projects all four grant events with a canonical grant id', async () => {
+    for (const eventType of GRANT_EVENTS) {
+      const pool = new FakePool(
+        () => new FakeClient([{ when: () => true, rows: [grantRow(GRANT, eventType)] }]),
+      );
+      const claimed = await new OutboxStore(pool).claim({ limit: 1 });
+      expect(claimed).toHaveLength(1);
+      expect(claimed[0]?.resourceType).toBe('authorization_grant');
+      expect(claimed[0]?.eventType).toBe(eventType);
+      expect(claimed[0]?.resourceId).toBe(GRANT);
+    }
+  });
+
+  it('rejects a malformed grant resource or a mismatched resource type', async () => {
+    const rows = [
+      grantRow(`${GRANT}\n`, 'control.grant.issued'),
+      grantRow(`${GRANT} `, 'control.grant.issued'),
+      grantRow('openarc:grant:00000000-0000-1000-8000-0000000000d4', 'control.grant.replaced'),
+      grantRow('openarc:grant:00000000-0000-4000-7000-0000000000d4', 'control.grant.revoked'),
+      grantRow('OPENARC:GRANT:00000000-0000-4000-8000-0000000000d4', 'control.grant.claimed'),
+      grantRow('openarc:action:00000000-0000-4000-8000-0000000000d4', 'control.grant.claimed'),
+      grantRow('00000000-0000-4000-8000-0000000000d4', 'control.grant.issued'),
+      grantRow(GRANT, 'control.grant.issued', 'commerce_action'),
+      grantRow(GRANT, 'control.commerce_action.authorized'),
+    ];
+    for (const row of rows) {
+      const pool = new FakePool(() => new FakeClient([{ when: () => true, rows: [row] }]));
+      await expectCodeOutbox(new OutboxStore(pool).claim({ limit: 1 }), 'OUTBOX_STORE_UNAVAILABLE');
+    }
+  });
+});
+
 async function expectCodeOutbox(promise: Promise<unknown>, code: string): Promise<void> {
   try {
     await promise;

@@ -74,6 +74,7 @@ export type ClaimedOutboxEvent = {
   | { readonly resourceType: 'budget_policy_revision'; readonly resourceId: string; readonly eventType: 'control.policy.revision.created' }
   | { readonly resourceType: 'commerce_session'; readonly resourceId: string; readonly eventType: 'control.commerce_session.issued' | 'control.commerce_session.exchanged' | 'control.commerce_session.revoked' }
   | { readonly resourceType: 'commerce_action'; readonly resourceId: string; readonly eventType: 'control.commerce_action.authorized' | 'control.commerce_action.approved' | 'control.commerce_action.rejected' | 'control.commerce_action.cancelled' }
+  | { readonly resourceType: 'authorization_grant'; readonly resourceId: string; readonly eventType: 'control.grant.issued' | 'control.grant.replaced' | 'control.grant.revoked' | 'control.grant.claimed' }
 );
 
 const ORG_ID = /^openarc:org:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -118,6 +119,8 @@ function isPolicyRevisionResource(value: string): boolean {
 
 const COMMERCE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const COMMERCE_ACTION_ID = /^openarc:action:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$(?![\s\S])/;
+// Mirrors openarc_durable.is_canonical_grant_id (schema12) with an absolute end.
+const GRANT_ID = /^openarc:grant:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$(?![\s\S])/;
 
 export interface ClaimInput {
   readonly limit?: number;
@@ -438,6 +441,21 @@ export class OutboxStore {
             | 'control.commerce_action.approved'
             | 'control.commerce_action.rejected'
             | 'control.commerce_action.cancelled',
+        };
+      case 'authorization_grant|control.grant.issued':
+      case 'authorization_grant|control.grant.replaced':
+      case 'authorization_grant|control.grant.revoked':
+      case 'authorization_grant|control.grant.claimed':
+        if (!GRANT_ID.test(resourceId)) fail('OUTBOX_STORE_UNAVAILABLE');
+        return {
+          ...base,
+          resourceType: 'authorization_grant',
+          resourceId,
+          eventType: eventType as
+            | 'control.grant.issued'
+            | 'control.grant.replaced'
+            | 'control.grant.revoked'
+            | 'control.grant.claimed',
         };
       default:
         fail('OUTBOX_STORE_UNAVAILABLE');

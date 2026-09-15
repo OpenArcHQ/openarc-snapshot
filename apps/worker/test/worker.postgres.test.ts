@@ -10,6 +10,7 @@ import {
   OutboxStore,
   TenantStore,
   createDatabasePool,
+  digestCommerceGrantToken,
   migrate,
   reviewedEndpointDigest,
   type ClaimedOutboxEvent,
@@ -22,8 +23,14 @@ import {
   tenantUrl,
   workerUrl,
 } from '../../../packages/db/test/postgres-fixture.js';
+import {
+  insertOutboxEventForPair,
+  outboxPairKey,
+  readPermittedOutboxEventPairs,
+} from '../../../packages/db/test/outbox-event-catalog.js';
 import { WorkerLoop, type WorkerLogRecord } from '../src/worker.js';
 import {
+  NOTIFICATION_EVENT_KEYS,
   createHandlerRegistry,
   eventKeyOf,
   validateNotification,
@@ -1806,5 +1813,140 @@ describe('worker consumes commerce-action events produced by real lifecycle tran
       });
     },
     60000,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// No DB-permitted event may be unprojectable or unregistered. One such row
+// fails the WHOLE claim batch and the loop stops after
+// maxConsecutiveClaimErrors, so every notification of every type jams. The
+// permitted set is read from the migrated outbox CHECK constraints, so a
+// migration that adds an event type fails here until the store AND the worker
+// handle it.
+// ---------------------------------------------------------------------------
+describe('every DB-permitted outbox event is projected and registered', () => {
+  it('matches the worker registry exactly to the pairs the outbox CHECK constraints permit', async () => {
+    const pairs = await readPermittedOutboxEventPairs(admin);
+    const permitted = pairs.map(outboxPairKey).sort();
+    expect(permitted).toContain('authorization_grant|control.grant.issued');
+    expect([...NOTIFICATION_EVENT_KEYS].sort()).toEqual(permitted);
+    const registry = createHandlerRegistry();
+    expect(Object.keys(registry).sort()).toEqual(permitted);
+
+    const owner = await seedOwner(95);
+    await outbox.initialize();
+    const failures: string[] = [];
+    for (const [index, pair] of pairs.entries()) {
+      const key = outboxPairKey(pair);
+      const eventId = await insertOutboxEventForPair(admin, owner.org, pair, index);
+      try {
+        const claimed = await outbox.claim({ limit: 1 });
+        expect(claimed).toHaveLength(1);
+        const event = claimed[0] as ClaimedOutboxEvent;
+        expect(event.eventId).toBe(eventId);
+        expect(eventKeyOf(event)).toBe(key);
+        expect(validateNotification(event)).toEqual(event);
+        const handler = registry[key as NotificationEventKey];
+        expect(handler).toBeTypeOf('function');
+        await handler(event, { signal: new AbortController().signal });
+        await expect(outbox.complete(eventId, event.leaseGeneration)).resolves.toEqual({
+          applied: true,
+        });
+      } catch {
+        failures.push(key);
+        await admin.query(
+          `UPDATE openarc_durable.outbox_events
+              SET state = 'completed', lease_until = NULL, completed_at = clock_timestamp()
+            WHERE event_id = $1`,
+          [eventId],
+        );
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+});
+
+describe('worker consumes a real authorization-grant event without jamming the queue', () => {
+  it(
+    'claims and acks control.grant.issued from the real issue transaction and the event after it',
+    async () => {
+      const seed = 96;
+      const chain = await seedActionChain(seed, 'none');
+      const action = commerceActionId(seed * 10 + 1);
+      const requirement = await seedActionRequirement(chain, seed * 10 + 1);
+      const authorizeMutation = actionMutationId(seed, 11);
+      const authorized = await migrator.query<{ out_status: string }>(
+        AUTHORIZE_CORE_SQL,
+        authorizeParams(chain, requirement, action, authorizeMutation, actionKey(seed, 11)),
+      );
+      expect(authorized.rows[0]).toMatchObject({ out_status: 'reserved_not_granted' });
+
+      // ---- real grant issue (schema12 reviewed internal_fixture seam) --------
+      const grantMutation = actionMutationId(seed, 31);
+      const issued = await migrator.query<{ out_grant_id: string; out_status: string }>(
+        `SELECT * FROM openarc_durable.issue_authorization_grant_core(
+           'internal_fixture', $1, $2, $3, 1, $4::uuid, $5, $6, $7)`,
+        [
+          chain.commerceTokenHash,
+          action,
+          digestCommerceGrantToken(`oag_v1_${'A'.repeat(43)}`),
+          grantMutation,
+          'b'.repeat(64),
+          'c'.repeat(64),
+          'd'.repeat(64),
+        ],
+      );
+      expect(issued.rows[0]).toMatchObject({ out_status: 'issued' });
+      const grant = issued.rows[0]?.out_grant_id ?? '';
+      expect(grant).toBe(`openarc:grant:${grantMutation}`);
+      // Written by the issue transaction itself, not a separate insert.
+      expect(await outboxTxn('control.grant.issued', grant)).toBe(
+        await txnOf(
+          'SELECT xmin::text AS value FROM openarc_durable.authorization_grants WHERE grant_id = $1',
+          [grant],
+        ),
+      );
+
+      // ---- an ordinary event committed AFTER the grant event -----------------
+      const following = await store.createAgentDurably(chain.owner.hash, chain.owner.org, 'After Grant', {
+        idempotencyKey: base64Key(9_600),
+        mutationId: mutationId(9_600),
+      });
+      const followingAgent = following.receipt.resourceId;
+
+      await outbox.initialize();
+      const claimedRows: ClaimedOutboxEvent[] = [];
+      const records: WorkerLogRecord[] = [];
+      await runWorkerLoop(recordingOutbox(outbox, claimedRows), createHandlerRegistry(), records);
+
+      expect(records.some((record) => record.status === 'claim_error')).toBe(false);
+      expect(records.some((record) => record.status === 'failed')).toBe(false);
+      const grantIndex = claimedRows.findIndex(
+        (event) => event.resourceType === 'authorization_grant' && event.resourceId === grant,
+      );
+      const followingIndex = claimedRows.findIndex(
+        (event) => event.eventType === 'tenant.agent.created' && event.resourceId === followingAgent,
+      );
+      expect(grantIndex).toBeGreaterThanOrEqual(0);
+      expect(claimedRows[grantIndex]?.eventType).toBe('control.grant.issued');
+      expect(followingIndex).toBeGreaterThan(grantIndex);
+      expect(
+        records.filter((record) => record.status === 'completed' && record.eventType === 'control.grant.issued'),
+      ).toHaveLength(1);
+
+      // The whole durable queue, grant event and the event after it included,
+      // is acknowledged: nothing is left pending, leased or dead-lettered.
+      const states = await admin.query<{ event_type: string; resource_id: string; state: string }>(
+        'SELECT event_type, resource_id, state FROM openarc_durable.outbox_events',
+      );
+      expect(states.rows.filter((row) => row.state !== 'completed')).toEqual([]);
+      expect(states.rows).toEqual(
+        expect.arrayContaining([
+          { event_type: 'control.grant.issued', resource_id: grant, state: 'completed' },
+          { event_type: 'tenant.agent.created', resource_id: followingAgent, state: 'completed' },
+        ]),
+      );
+    },
+    60_000,
   );
 });

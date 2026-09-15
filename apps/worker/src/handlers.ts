@@ -13,8 +13,9 @@ import type { ClaimedOutboxEvent } from '@openarc/db';
  * accepted by ClaimedOutboxEvent (the original tenant events, four
  * notification-only credential events, the market listing and listing-version
  * lifecycle events, the five control policy events, the three
- * notification-only commerce-session events, and the four notification-only
- * commerce-action events). There are no dynamic callbacks, user URLs or plugin
+ * notification-only commerce-session events, the four notification-only
+ * commerce-action events, and the four notification-only authorization-grant
+ * events). There are no dynamic callbacks, user URLs or plugin
  * handlers, and the original event is never JSON-logged.
  */
 
@@ -66,7 +67,11 @@ export type NotificationEventKey =
   | 'commerce_action|control.commerce_action.authorized'
   | 'commerce_action|control.commerce_action.approved'
   | 'commerce_action|control.commerce_action.rejected'
-  | 'commerce_action|control.commerce_action.cancelled';
+  | 'commerce_action|control.commerce_action.cancelled'
+  | 'authorization_grant|control.grant.issued'
+  | 'authorization_grant|control.grant.replaced'
+  | 'authorization_grant|control.grant.revoked'
+  | 'authorization_grant|control.grant.claimed';
 
 export type NotificationHandlerRegistry = Readonly<
   Record<NotificationEventKey, NotificationHandler>
@@ -101,6 +106,10 @@ export const NOTIFICATION_EVENT_KEYS: readonly NotificationEventKey[] = [
   'commerce_action|control.commerce_action.approved',
   'commerce_action|control.commerce_action.rejected',
   'commerce_action|control.commerce_action.cancelled',
+  'authorization_grant|control.grant.issued',
+  'authorization_grant|control.grant.replaced',
+  'authorization_grant|control.grant.revoked',
+  'authorization_grant|control.grant.claimed',
 ];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -152,6 +161,11 @@ const COMMERCE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f
 // absolute end, so a trailing LF/CR, a suffix or any other coercion can never
 // satisfy the anchor. This mirrors the accepted durable outbox type.
 const COMMERCE_ACTION_ID = /^openarc:action:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![\s\S])/;
+
+// Authorization grant resource: the exact canonical lower-case openarc:grant:
+// prefix plus a UUIDv4 and an absolute end, mirroring the schema12
+// is_canonical_grant_id grammar and the durable outbox projection.
+const GRANT_ID = /^openarc:grant:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![\s\S])/;
 
 // The exact safe metadata keyset accepted at the handler boundary. Anything
 // else (a private canary, an internal digest, a raw body) is rejected rather
@@ -310,6 +324,12 @@ export function validateNotification(raw: unknown): ClaimedOutboxEvent {
     case 'commerce_action|control.commerce_action.cancelled':
       if (!COMMERCE_ACTION_ID.test(resourceId)) throw new InvalidEventError();
       break;
+    case 'authorization_grant|control.grant.issued':
+    case 'authorization_grant|control.grant.replaced':
+    case 'authorization_grant|control.grant.revoked':
+    case 'authorization_grant|control.grant.claimed':
+      if (!GRANT_ID.test(resourceId)) throw new InvalidEventError();
+      break;
     default:
       throw new InvalidEventError();
   }
@@ -350,6 +370,10 @@ const DEFAULT_HANDLERS: Record<NotificationEventKey, NotificationHandler> = {
   'commerce_action|control.commerce_action.approved': consume,
   'commerce_action|control.commerce_action.rejected': consume,
   'commerce_action|control.commerce_action.cancelled': consume,
+  'authorization_grant|control.grant.issued': consume,
+  'authorization_grant|control.grant.replaced': consume,
+  'authorization_grant|control.grant.revoked': consume,
+  'authorization_grant|control.grant.claimed': consume,
 };
 
 /**

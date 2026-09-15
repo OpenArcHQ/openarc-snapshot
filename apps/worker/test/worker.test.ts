@@ -198,9 +198,33 @@ const COMMERCE_ACTION_CASES: readonly EventCase[] = [
   },
 ];
 
+const GRANT_CASES: readonly EventCase[] = [
+  {
+    resourceType: 'authorization_grant',
+    eventType: 'control.grant.issued',
+    resourceId: 'openarc:grant:00000000-0000-4000-8000-000000000070',
+  },
+  {
+    resourceType: 'authorization_grant',
+    eventType: 'control.grant.replaced',
+    resourceId: 'openarc:grant:00000000-0000-4000-8000-000000000071',
+  },
+  {
+    resourceType: 'authorization_grant',
+    eventType: 'control.grant.revoked',
+    resourceId: 'openarc:grant:00000000-0000-4000-8000-000000000072',
+  },
+  {
+    resourceType: 'authorization_grant',
+    eventType: 'control.grant.claimed',
+    resourceId: 'openarc:grant:00000000-0000-4000-8000-000000000073',
+  },
+];
+
 /**
- * The exact closed inventory: 21 legacy tuples, the 3 commerce-session tuples
- * and the 4 notification-only commerce-action tuples.
+ * The exact closed inventory: 21 legacy tuples, the 3 commerce-session tuples,
+ * the 4 notification-only commerce-action tuples and the 4 notification-only
+ * authorization-grant tuples.
  */
 const EXPECTED_EVENT_KEYS: readonly string[] = [
   'organization|tenant.organization.created',
@@ -231,6 +255,10 @@ const EXPECTED_EVENT_KEYS: readonly string[] = [
   'commerce_action|control.commerce_action.approved',
   'commerce_action|control.commerce_action.rejected',
   'commerce_action|control.commerce_action.cancelled',
+  'authorization_grant|control.grant.issued',
+  'authorization_grant|control.grant.replaced',
+  'authorization_grant|control.grant.revoked',
+  'authorization_grant|control.grant.claimed',
 ];
 
 function eventFor(item: EventCase): ClaimedOutboxEvent {
@@ -411,7 +439,7 @@ describe('worker configuration', () => {
 });
 
 describe('notification handler registry', () => {
-  it('keeps the exact closed event inventory: 21 legacy tuples plus the 3 commerce-session and 4 commerce-action tuples', () => {
+  it('keeps the exact closed event inventory: 21 legacy tuples plus the 3 commerce-session, 4 commerce-action and 4 grant tuples', () => {
     expect([...NOTIFICATION_EVENT_KEYS]).toEqual(EXPECTED_EVENT_KEYS);
     const registry = createHandlerRegistry();
     expect(Object.keys(registry).sort()).toEqual([...EXPECTED_EVENT_KEYS].sort());
@@ -425,6 +453,7 @@ describe('notification handler registry', () => {
       ...POLICY_CASES,
       ...COMMERCE_SESSION_CASES,
       ...COMMERCE_ACTION_CASES,
+      ...GRANT_CASES,
     ]) {
       const event = eventFor(item);
       const key = eventKeyOf(event);
@@ -559,6 +588,43 @@ describe('notification handler registry', () => {
       expect(EXPECTED_EVENT_KEYS).toContain(key);
       expect(registry[key as keyof typeof registry]).toBeTypeOf('function');
     }
+  });
+
+  it('accepts each of the four grant tuples and rejects a malformed grant id', async () => {
+    const registry = createHandlerRegistry();
+    for (const item of GRANT_CASES) {
+      const event = eventFor(item);
+      const key = `${item.resourceType}|${item.eventType}`;
+      expect(eventKeyOf(event)).toBe(key);
+      expect(validateNotification(event)).toEqual(event);
+      const handler = registry[key as keyof typeof registry];
+      expect(handler).toBeTypeOf('function');
+      await handler(event, { signal: new AbortController().signal });
+    }
+    const malformed = [
+      'openarc:grant:00000000-0000-4000-8000-000000000070\n',
+      'openarc:grant:00000000-0000-1000-8000-000000000070',
+      'openarc:grant:00000000-0000-4000-7000-000000000070',
+      'OPENARC:GRANT:00000000-0000-4000-8000-000000000070',
+      'openarc:action:00000000-0000-4000-8000-000000000070',
+      '00000000-0000-4000-8000-000000000070',
+    ];
+    for (const resourceId of malformed) {
+      expect(() =>
+        validateNotification(
+          baseEvent({ resourceType: 'authorization_grant', eventType: 'control.grant.issued', resourceId }),
+        ),
+      ).toThrow(InvalidEventError);
+    }
+    expect(() =>
+      validateNotification(
+        baseEvent({
+          resourceType: 'commerce_action',
+          eventType: 'control.grant.claimed',
+          resourceId: 'openarc:grant:00000000-0000-4000-8000-000000000073',
+        }),
+      ),
+    ).toThrow(InvalidEventError);
   });
 
   it('rejects mismatched commerce-action resource/event pairs', () => {

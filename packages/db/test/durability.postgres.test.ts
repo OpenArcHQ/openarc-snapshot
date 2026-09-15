@@ -17,6 +17,11 @@ import {
   tenantUrl,
   workerUrl,
 } from './postgres-fixture.js';
+import {
+  insertOutboxEventForPair,
+  outboxPairKey,
+  readPermittedOutboxEventPairs,
+} from './outbox-event-catalog.js';
 
 /**
  * Real PostgreSQL acceptance for the durability slice (schema3).
@@ -1608,5 +1613,56 @@ describe('durable status and replay session revalidation under lock waits', () =
       await blocker.query('ROLLBACK').catch(() => {});
       blocker.release();
     }
+  });
+});
+
+/**
+ * Guard against a queue-jamming projection gap: one outbox row the store cannot
+ * project fails the WHOLE claim batch, permanently. The permitted
+ * (resource_type, event_type) set is read from the migrated CHECK constraints,
+ * so a migration that adds an event type fails this suite until
+ * OutboxStore projects it.
+ */
+describe('outbox store projects every DB-permitted event pair', () => {
+  it('claims and completes a row for each pair the outbox CHECK constraints permit', async () => {
+    const pairs = await readPermittedOutboxEventPairs(admin);
+    expect(pairs.length).toBeGreaterThanOrEqual(32);
+    expect(pairs.map(outboxPairKey)).toEqual(
+      expect.arrayContaining([
+        'authorization_grant|control.grant.issued',
+        'authorization_grant|control.grant.replaced',
+        'authorization_grant|control.grant.revoked',
+        'authorization_grant|control.grant.claimed',
+      ]),
+    );
+    const owner = await seedOwner(90);
+    await outbox.initialize();
+    const unprojectable: string[] = [];
+    for (const [index, pair] of pairs.entries()) {
+      const eventId = await insertOutboxEventForPair(admin, owner.org, pair, index);
+      try {
+        const claimed = await outbox.claim({ limit: 1 });
+        expect(claimed).toHaveLength(1);
+        expect(claimed[0]).toMatchObject({
+          eventId,
+          resourceType: pair.resourceType,
+          eventType: pair.eventType,
+        });
+        await expect(outbox.complete(eventId, claimed[0]?.leaseGeneration)).resolves.toEqual({
+          applied: true,
+        });
+      } catch {
+        unprojectable.push(outboxPairKey(pair));
+        // Retire the jammed row so the remaining pairs are still exercised.
+        await admin.query(
+          `UPDATE openarc_durable.outbox_events
+              SET state = 'completed', lease_until = NULL, completed_at = clock_timestamp()
+            WHERE event_id = $1`,
+          [eventId],
+        );
+      }
+    }
+    expect(unprojectable).toEqual([]);
+    assertPoolContextReleased(worker);
   });
 });
