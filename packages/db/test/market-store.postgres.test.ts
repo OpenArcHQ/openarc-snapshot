@@ -265,6 +265,8 @@ describe('schema6 manifest and ACLs', () => {
       '0014_grant_mutation_reads',
       '0015_payment_attempts',
       '0016_evidence_store',
+      '0017_settlement_observation',
+      '0018_operator_reads',
     ]);
     const helpers = await admin.query<{
       proname: string;

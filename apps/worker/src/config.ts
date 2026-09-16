@@ -120,3 +120,147 @@ export function parseWorkerConfig(env: WorkerEnvironment): WorkerConfig {
 
   return { enabled: true, databaseUrl, claimLimit, pollMs, idleMaxMs, shutdownGraceMs };
 }
+
+/**
+ * Settlement observation family (migration 0017).
+ *
+ * LIMITATION: this family OBSERVES durable payment attempts through an
+ * injected lookup transport and records only a positive observation. It never
+ * signs, sends, settles or moves funds.
+ *
+ * Like every other protected commerce family, it ships DEFAULT OFF and is an
+ * INDEPENDENT flag: enabling it requires the worker itself to be enabled and
+ * the dedicated worker database URL. A disabled family parses no transport
+ * URL, opens no connection and starts no loop.
+ */
+
+export const SETTLEMENT_LIVE_MODE_MESSAGE =
+  'Live settlement observation is not available in this build. ' +
+  'Live Gateway lookups are P04-07 (live testnet acceptance) work and require, ' +
+  'at minimum: a reviewed live transport against the pinned facilitator origin, ' +
+  'a user-funded disposable testnet wallet, the unverified live behaviours in the ' +
+  'P04-01 lane contract confirmed against the real endpoint, and an explicit ' +
+  'operator decision to expose real funds. Until then the lookup transport must ' +
+  'address a loopback fixture.';
+
+/**
+ * Refusing live-mode stub. Live mode is deliberately out of scope for this
+ * packet: there is no code path here that can reach a real Circle, Gateway or
+ * Arc endpoint.
+ */
+export class SettlementLiveModeUnsupportedError extends Error {
+  constructor() {
+    super(SETTLEMENT_LIVE_MODE_MESSAGE);
+    this.name = 'SettlementLiveModeUnsupportedError';
+  }
+}
+
+export interface DisabledSettlementConfig {
+  readonly enabled: false;
+}
+
+export interface EnabledSettlementConfig {
+  readonly enabled: true;
+  /** Dedicated worker connection URL. Never logged. */
+  readonly databaseUrl: string;
+  /** Loopback-only lookup transport base URL. Never logged. */
+  readonly lookupUrl: string;
+  readonly claimLimit: number;
+  readonly pollMs: number;
+  readonly idleMaxMs: number;
+  readonly lookupTimeoutMs: number;
+}
+
+export type SettlementConfig = DisabledSettlementConfig | EnabledSettlementConfig;
+
+const SETTLEMENT_CLAIM_LIMIT_DEFAULT = 5;
+const SETTLEMENT_CLAIM_LIMIT_MIN = 1;
+const SETTLEMENT_CLAIM_LIMIT_MAX = 25;
+const SETTLEMENT_POLL_MS_DEFAULT = 1000;
+const SETTLEMENT_POLL_MS_MIN = 250;
+const SETTLEMENT_POLL_MS_MAX = 10000;
+const SETTLEMENT_IDLE_MAX_MS_DEFAULT = 5000;
+const SETTLEMENT_IDLE_MAX_MS_MIN = 1000;
+const SETTLEMENT_IDLE_MAX_MS_MAX = 30000;
+const SETTLEMENT_LOOKUP_TIMEOUT_MS_DEFAULT = 10000;
+const SETTLEMENT_LOOKUP_TIMEOUT_MS_MIN = 1;
+const SETTLEMENT_LOOKUP_TIMEOUT_MS_MAX = 30000;
+const LOOKUP_URL_MAX = 2048;
+
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
+
+/**
+ * Exactly a loopback origin. A public host, a credentialed URL, a non-HTTP
+ * scheme or any hostname that is not literally loopback is refused: without an
+ * explicit live mode this process may not address a real endpoint, and live
+ * mode itself is refused by `requireSettlementLookupUrl` below.
+ */
+export function isLoopbackLookupUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+  if (url.username.length > 0 || url.password.length > 0) return false;
+  if (url.hash.length > 0) return false;
+  return LOOPBACK_HOSTS.has(url.hostname);
+}
+
+/**
+ * Resolve the lookup transport URL. There is NO default: a missing URL is a
+ * configuration error, never a silent fallback to some real endpoint. A
+ * non-loopback URL is refused unless live mode is explicitly requested, and
+ * live mode is itself refused as unimplemented (P04-07).
+ */
+export function requireSettlementLookupUrl(raw: string | undefined, live: boolean): string {
+  if (live) throw new SettlementLiveModeUnsupportedError();
+  if (raw === undefined || raw.length === 0 || raw.length > LOOKUP_URL_MAX) {
+    throw new WorkerConfigError();
+  }
+  if (!isLoopbackLookupUrl(raw)) throw new WorkerConfigError();
+  return raw;
+}
+
+/**
+ * Parse exactly the documented settlement observation settings. Disabled is
+ * the default; a disabled family requires no database URL and no transport.
+ */
+export function parseSettlementConfig(env: WorkerEnvironment): SettlementConfig {
+  const enabled = parseEnabled(env['WORKER_SETTLEMENT_OBSERVATION_ENABLED']);
+  if (!enabled) return { enabled: false };
+
+  // An independent family still cannot run without the worker process itself.
+  if (!parseEnabled(env['WORKER_ENABLED'])) throw new WorkerConfigError();
+  const databaseUrl = requireDatabaseUrl(env['WORKER_DATABASE_URL']);
+  const live = parseEnabled(env['WORKER_SETTLEMENT_LIVE_MODE']);
+  const lookupUrl = requireSettlementLookupUrl(env['WORKER_SETTLEMENT_LOOKUP_URL'], live);
+  const claimLimit = parseInteger(
+    env['WORKER_SETTLEMENT_CLAIM_LIMIT'],
+    SETTLEMENT_CLAIM_LIMIT_DEFAULT,
+    SETTLEMENT_CLAIM_LIMIT_MIN,
+    SETTLEMENT_CLAIM_LIMIT_MAX,
+  );
+  const pollMs = parseInteger(
+    env['WORKER_SETTLEMENT_POLL_MS'],
+    SETTLEMENT_POLL_MS_DEFAULT,
+    SETTLEMENT_POLL_MS_MIN,
+    SETTLEMENT_POLL_MS_MAX,
+  );
+  const idleMaxMs = parseInteger(
+    env['WORKER_SETTLEMENT_IDLE_MAX_MS'],
+    SETTLEMENT_IDLE_MAX_MS_DEFAULT,
+    SETTLEMENT_IDLE_MAX_MS_MIN,
+    SETTLEMENT_IDLE_MAX_MS_MAX,
+  );
+  const lookupTimeoutMs = parseInteger(
+    env['WORKER_SETTLEMENT_LOOKUP_TIMEOUT_MS'],
+    SETTLEMENT_LOOKUP_TIMEOUT_MS_DEFAULT,
+    SETTLEMENT_LOOKUP_TIMEOUT_MS_MIN,
+    SETTLEMENT_LOOKUP_TIMEOUT_MS_MAX,
+  );
+  if (idleMaxMs < pollMs) throw new WorkerConfigError();
+
+  return { enabled: true, databaseUrl, lookupUrl, claimLimit, pollMs, idleMaxMs, lookupTimeoutMs };
+}

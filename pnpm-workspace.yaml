@@ -1,6 +1,8 @@
 packages:
   - apps/*
   - packages/*
+  - tools/agent-harness
+  - tools/x402-reference-provider
 
 allowBuilds:
   esbuild: true

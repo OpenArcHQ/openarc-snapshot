@@ -43,6 +43,34 @@ describe("PORT-08 Vault workspace code splitting", () => {
     expect(closure.filter((file) => file.startsWith("vault/"))).toEqual([]);
   });
 
+  /**
+   * P04-06c mounts the purchase review inside the Vault workspace, which pulls
+   * the protected console's review modules into the LAZY workspace chunk. That
+   * direction is fine; the reverse is not. A public route must still download
+   * no Vault code, and the protected console must still reach the Vault only
+   * through type-only imports, which are erased at build time.
+   */
+  it("the workspace purchase review is reachable only through the lazy Vault entry", async () => {
+    const workspaceClosure = await staticClosure("vault/VaultWorkspace.tsx");
+    expect([...workspaceClosure]).toContain("vault/PurchasesPanel.tsx");
+    expect([...workspaceClosure]).toContain("tenant/PurchaseReviewPanel.tsx");
+
+    const appClosure = [...await staticClosure("App.tsx")];
+    for (const module of [
+      "vault/PurchasesPanel.tsx",
+      "vault/purchase-binding.ts",
+      "tenant/PurchaseReviewPanel.tsx",
+      "tenant/purchase-controller.ts",
+    ]) {
+      expect(appClosure, `public entry must not statically reach ${module}`).not.toContain(module);
+    }
+  });
+
+  it("the protected console still pulls no Vault module into its own chunk", async () => {
+    const closure = [...await staticClosure("tenant/TenantApp.tsx")];
+    expect(closure.filter((file) => file.startsWith("vault/"))).toEqual([]);
+  });
+
   it("the session-end lock bridge stays dynamic and never pulls the workspace statically", async () => {
     const trigger = await source("app/vault-session-lock.ts");
     expect(trigger).not.toMatch(staticVaultImport);

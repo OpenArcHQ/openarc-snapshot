@@ -40,6 +40,13 @@ import { ApprovalQueuePanel } from "./ApprovalQueuePanel.js";
 import { ActionDetailPanel, ActionDecisionView } from "./ActionDetailPanel.js";
 import { ApprovalDetailPanel } from "./ApprovalDetailPanel.js";
 import { ActionExposurePanel } from "./ActionExposurePanel.js";
+import {
+  PURCHASE_WORKSPACE_HREF,
+  PurchaseController,
+  initialPurchaseControllerState,
+  type PurchaseControllerState,
+} from "./purchase-controller.js";
+import { PurchaseReviewPanel } from "./PurchaseReviewPanel.js";
 import { commerceGrantsEnabledFromEnv } from "./grant-availability.js";
 import { parseGrantRoute, type GrantRoute } from "./grant-routes.js";
 import {
@@ -435,6 +442,12 @@ export default function TenantApp() {
   // flushSync as the controller clear so no previous form frame is painted.
   const [sessionFormGeneration, setSessionFormGeneration] = useState(0);
   const [actionState, setActionState] = useState<ActionControllerState>(initialActionControllerState);
+  // The purchase handoff has its own controller so the action console keeps its
+  // exact accepted behaviour. It is receipt-gated: without an unlocked Vault
+  // binding it refuses every decision and sends nothing.
+  const [purchaseState, setPurchaseState] = useState<PurchaseControllerState>(
+    initialPurchaseControllerState,
+  );
   // Monotonic privacy generation that remounts the exposure form subtree on an
   // external hidden/pagehide boundary, committed inside the same flushSync as
   // the controller clear so no previous form frame is painted.
@@ -458,6 +471,7 @@ export default function TenantApp() {
   const policyControllerRef = useRef<PolicyController | null>(null);
   const sessionControllerRef = useRef<SessionController | null>(null);
   const actionControllerRef = useRef<ActionController | null>(null);
+  const purchaseControllerRef = useRef<PurchaseController | null>(null);
   const grantControllerRef = useRef<GrantController | null>(null);
   const sessionSelectedAgentRef = useRef<string | null>(null);
   const boundMachineContextRef = useRef<MachineRenderContext | null>(null);
@@ -662,6 +676,22 @@ export default function TenantApp() {
         })
       : null;
     actionControllerRef.current = actionController;
+    // The purchase handoff reuses the SAME browser-audience routes and the same
+    // public capability probe as the action console. It is constructed with NO
+    // Vault binding and is never given one: this shell holds no unlocked
+    // workspace, and P04-06c deliberately does not grow one here. The review
+    // renders read-only and links to the encrypted workspace, which owns
+    // unlock, lock, cross-tab coordination and the revision guard. No decision
+    // request can originate from this console.
+    const purchaseController = actionsEnabled
+      ? new PurchaseController({
+          account,
+          reads: actionReads,
+          vault: null,
+          onState: setPurchaseState,
+        })
+      : null;
+    purchaseControllerRef.current = purchaseController;
     // The authorization-grant controller is constructed ONLY when its own flag
     // and all prerequisites are enabled. It mounts no request until a protected
     // grant route initializes the independent public credentialless capability
@@ -699,6 +729,7 @@ export default function TenantApp() {
           policyController?.clear();
           sessionController?.clear();
           actionController?.clear();
+          purchaseController?.clear();
           grantController?.clear();
           setPolicyFormGeneration((value) => value + 1);
           setSessionFormGeneration((value) => value + 1);
@@ -717,6 +748,7 @@ export default function TenantApp() {
         policyController?.clear();
         sessionController?.clear();
         actionController?.clear();
+        purchaseController?.clear();
         grantController?.clear();
         setPolicyFormGeneration((value) => value + 1);
         setSessionFormGeneration((value) => value + 1);
@@ -738,6 +770,7 @@ export default function TenantApp() {
       policyController?.dispose();
       sessionController?.dispose();
       actionController?.dispose();
+      purchaseController?.dispose();
       grantController?.dispose();
       if (controllerRef.current === controller) controllerRef.current = null;
       if (writeControllerRef.current === writeController) writeControllerRef.current = null;
@@ -746,6 +779,7 @@ export default function TenantApp() {
       if (policyControllerRef.current === policyController) policyControllerRef.current = null;
       if (sessionControllerRef.current === sessionController) sessionControllerRef.current = null;
       if (actionControllerRef.current === actionController) actionControllerRef.current = null;
+      if (purchaseControllerRef.current === purchaseController) purchaseControllerRef.current = null;
       if (grantControllerRef.current === grantController) grantControllerRef.current = null;
       if (accountRef.current === account) accountRef.current = null;
     };
@@ -780,6 +814,7 @@ export default function TenantApp() {
   useEffect(() => {
     if (isActionWorkspacePath(path)) return;
     actionControllerRef.current?.clear();
+    purchaseControllerRef.current?.clear();
   }, [path]);
 
   // Clear every grant artifact when leaving the grant subtree.
@@ -843,6 +878,7 @@ export default function TenantApp() {
       setSessionSelectedAgent(null);
       sessionControllerRef.current?.clear();
       actionControllerRef.current?.clear();
+    purchaseControllerRef.current?.clear();
       grantControllerRef.current?.clear();
     }
   }, [accountId]);
@@ -884,6 +920,7 @@ export default function TenantApp() {
     setSessionSelectedAgent(null);
     sessionControllerRef.current?.clear();
     actionControllerRef.current?.clear();
+    purchaseControllerRef.current?.clear();
     grantControllerRef.current?.clear();
     invalidateSessionPolicies();
   }, [organizationId, invalidateSessionPolicies]);
@@ -941,6 +978,18 @@ export default function TenantApp() {
     const route = actionRouteOf(path);
     if (route === null) return;
     void actionController.initialize(route);
+  }, [path, actionsEnabled, organizationId, role, accountId]);
+
+  // The purchase handoff initializes ONLY for a single action detail route. The
+  // same public credentialless capability probe runs first; when it is not
+  // `enabled`, no purchase request is made and an honest unavailable state is
+  // rendered. No other route constructs a purchase read.
+  useEffect(() => {
+    const purchaseController = purchaseControllerRef.current;
+    if (purchaseController === null) return;
+    const route = actionRouteOf(path);
+    if (route === null || route.kind !== "detail") return;
+    void purchaseController.initialize(route.actionId);
   }, [path, actionsEnabled, organizationId, role, accountId]);
 
   // Initialize the grant controller only for a protected grant route. The
@@ -1222,6 +1271,7 @@ export default function TenantApp() {
     policyControllerRef.current?.clearSensitive();
     sessionControllerRef.current?.clear();
     actionControllerRef.current?.clear();
+    purchaseControllerRef.current?.clear();
     grantControllerRef.current?.clear();
     setListingCreating(false);
     setListingProviderId(null);
@@ -1543,6 +1593,8 @@ export default function TenantApp() {
             actionState={renderActionState(suppressAction, actionState)}
             actionController={suppressAction ? null : actionControllerRef.current}
             actionFormKey={actionFormKey}
+            purchaseState={suppressAction ? initialPurchaseControllerState() : purchaseState}
+            purchaseController={suppressAction ? null : purchaseControllerRef.current}
             onOpenAction={openAction}
             onOpenApproval={openApproval}
             grantsEnabled={grantsEnabled}
@@ -1736,6 +1788,8 @@ interface WorkspaceProps {
   actionState: ActionControllerState;
   actionController: ActionController | null;
   actionFormKey: string;
+  purchaseState: PurchaseControllerState;
+  purchaseController: PurchaseController | null;
   onOpenAction: (actionId: string) => void;
   onOpenApproval: (approvalId: string) => void;
   grantsEnabled: boolean;
@@ -1999,6 +2053,8 @@ function Workspace(props: WorkspaceProps) {
         route={actionRoute}
         state={props.actionState}
         controller={props.actionController}
+        purchaseState={props.purchaseState}
+        purchaseController={props.purchaseController}
         formKey={props.actionFormKey}
         onOpenAction={props.onOpenAction}
         onOpenApproval={props.onOpenApproval}
@@ -2958,6 +3014,8 @@ interface ActionWorkspaceProps {
   route: ActionRoute;
   state: ActionControllerState;
   controller: ActionController | null;
+  purchaseState: PurchaseControllerState;
+  purchaseController: PurchaseController | null;
   formKey: string;
   onOpenAction: (actionId: string) => void;
   onOpenApproval: (approvalId: string) => void;
@@ -3073,6 +3131,17 @@ function ActionWorkspace(props: ActionWorkspaceProps) {
       ) : null}
       {props.route.kind === "exposure" ? (
         <ActionExposurePanel state={props.state} controller={controller} formKey={props.formKey} />
+      ) : null}
+      {props.route.kind === "detail" ? (
+        <PurchaseReviewPanel
+          state={props.purchaseState}
+          controller={props.purchaseController}
+          actionId={props.route.actionId}
+          // P04-06c: this shell owns no unlocked Vault, so the review is
+          // read-only here and links to the workspace that does. No decision
+          // control is rendered and no decision request originates here.
+          decisions={{ kind: "elsewhere", href: PURCHASE_WORKSPACE_HREF }}
+        />
       ) : null}
       {props.route.kind === "detail" ? (
         <ActionDetailPanel

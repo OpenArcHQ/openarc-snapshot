@@ -13,6 +13,10 @@ import {
   CAPABILITY_DISCLOSURE,
   GATEWAY_DISCLOSURE,
   JOB_DISCLOSURE,
+  PURCHASE_DECISION_APPROVE_PATH,
+  PURCHASE_DECISION_DISCLOSURE,
+  PURCHASE_DECISION_REJECT_PATH,
+  PurchaseDecisionPermissionReceiptRecordSchema,
 } from "../src/permission.js";
 import { SentinelRecordSchema, WorkspaceRecordSchema, WorkspaceRecordSchemaVersion } from "../src/vault.js";
 
@@ -194,5 +198,68 @@ describe("P08-00 frozen shared Vault record literals", () => {
       digest: `sha256:${"0".repeat(64)}` }));
     expect(SentinelRecordSchema.safeParse({ ...sentinel, manifest: manifest(6_601) }).success, rule("manifest maximum 6601")).toBe(true);
     expect(SentinelRecordSchema.safeParse({ ...sentinel, manifest: manifest(6_602) }).success, rule("manifest maximum 6601")).toBe(false);
+  });
+
+  /**
+   * P04-06b additive entry. The frozen fixtures above predate v6 and are never
+   * regenerated, so v6 cannot appear in RECORD_SCHEMAS or RECEIPTS. From the
+   * moment a v6 receipt is first written its literals are stored inside real
+   * encrypted Vaults, so they are frozen here in the same style: byte-for-byte,
+   * with one appended character proving each literal is pinned.
+   */
+  it("freezes the v6 purchase-decision receipt destination, released-field tuple and disclosure text", () => {
+    expect(PURCHASE_DECISION_DISCLOSURE, rule("PURCHASE_DECISION_DISCLOSURE")).toEqual({
+      connectorId: "openarc_purchase_decision",
+      purpose: "Send one human approve-or-reject decision on one pending purchase to the OpenArc control API. Only the organization ID, the purchase ID, the decision and one mutation ID leave this browser; this moves no money.",
+      credentials: "same-origin",
+      openArcRetention: "The OpenArc API keeps this decision as its own authoritative control record. No reviewed purchase detail and no private workspace field is sent, and the record of what you reviewed is stored only in the encrypted local workspace.",
+      providerRetention: "No upstream provider, seller or payment network is contacted by this decision.",
+      hostingMetadata: "OpenArc and its hosting provider receive ordinary network metadata, including IP and user-agent.",
+    });
+    expect(PURCHASE_DECISION_APPROVE_PATH, rule("v6 approve destination path"))
+      .toBe("/v2/control/organizations/:organizationId/actions/:actionId/approve");
+    expect(PURCHASE_DECISION_REJECT_PATH, rule("v6 reject destination path"))
+      .toBe("/v2/control/organizations/:organizationId/actions/:actionId/reject");
+
+    const V4 = "12345678-1234-4234-8123-123456789abc";
+    const at = "2026-09-15T09:00:00.000Z";
+    const v6 = {
+      recordSchema: "openarc.permission-receipt.v6", kind: "permission_receipt",
+      recordId: "22222222-2222-4222-8222-222222222222", recordRevision: "B".repeat(32),
+      createdAt: at, updatedAt: at, connectorId: PURCHASE_DECISION_DISCLOSURE.connectorId,
+      destination: { origin: "https://app.example.test", path: PURCHASE_DECISION_APPROVE_PATH,
+        method: "POST", upstreams: [] },
+      releasedFields: ["organizationId", "actionId", "decision", "mutationId"],
+      released: { organizationId: `openarc:org:${V4}`, actionId: `openarc:action:${V4}`,
+        decision: "approve", mutationId: V4 },
+      reviewed: { listingId: `openarc:listing:${V4}`, listingVersion: "1",
+        providerId: `openarc:provider:${V4}`, amountAtomic: "1500000", feeAtomic: "250000",
+        debitAtomic: "1750000", asset: "USDC", decimals: 6, networkId: "eip155:5042002",
+        policyId: `openarc:policy:${V4}`, policyRevision: "1",
+        approvalId: `openarc:approval:${V4}`, approvalExpiresAt: "2026-09-15T09:15:00.000Z" },
+      purpose: PURCHASE_DECISION_DISCLOSURE.purpose, credentials: PURCHASE_DECISION_DISCLOSURE.credentials,
+      openArcRetention: PURCHASE_DECISION_DISCLOSURE.openArcRetention,
+      providerRetention: PURCHASE_DECISION_DISCLOSURE.providerRetention,
+      hostingMetadata: PURCHASE_DECISION_DISCLOSURE.hostingMetadata,
+      approvedAt: at, outcome: "approved", resolvedAt: null, failureCode: null,
+    };
+    expect(WorkspaceRecordSchema.safeParse(v6).success, rule("v6 receipt parses in the record union")).toBe(true);
+    expect(PurchaseDecisionPermissionReceiptRecordSchema.safeParse(v6).success, rule("v6 receipt")).toBe(true);
+
+    for (const field of DISCLOSURE_FIELDS) {
+      expect(WorkspaceRecordSchema.safeParse({ ...v6, [field]: `${String(v6[field as keyof typeof v6])} ` }).success,
+        rule(`v6 ${field} literal (one appended character)`)).toBe(false);
+    }
+    expect(WorkspaceRecordSchema.safeParse({ ...v6, recordSchema: "openarc.permission-receipt.v5" }).success,
+      rule("v6 recordSchema literal")).toBe(false);
+    expect(WorkspaceRecordSchema.safeParse({ ...v6, connectorId: "openarc_capabilities" }).success,
+      rule("v6 connectorId literal")).toBe(false);
+    for (const [name, changed] of [["path", `${PURCHASE_DECISION_APPROVE_PATH}/v2`], ["method", "PUT"],
+      ["upstreams", ["https://example.test"]]] as const) {
+      expect(WorkspaceRecordSchema.safeParse({ ...v6, destination: { ...v6.destination, [name]: changed } }).success,
+        rule(`v6 destination.${name}`)).toBe(false);
+    }
+    expect(WorkspaceRecordSchema.safeParse({ ...v6, releasedFields: ["organizationId", "actionId", "decision"] }).success,
+      rule("v6 releasedFields tuple")).toBe(false);
   });
 });

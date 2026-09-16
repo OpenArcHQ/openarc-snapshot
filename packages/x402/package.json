@@ -1,0 +1,35 @@
+{
+  "name": "@openarc/x402",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@circle-fin/x402-batching": "3.4.0",
+    "@openarc/shared": "workspace:*",
+    "@x402/core": "2.25.0",
+    "@x402/evm": "2.25.0",
+    "viem": "2.56.5",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "vitest": "4.1.11"
+  }
+}

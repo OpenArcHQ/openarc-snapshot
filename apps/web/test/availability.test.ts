@@ -79,4 +79,20 @@ describe("workspace section network claims", () => {
         expect(workspaceSectionUsesNetwork("policies-title", flags)).toBe(false);
       }
   });
+  /**
+   * P04-06c. The purchase review reads the control API under the commerce
+   * action gate, never an Arc source, so it claims lookups on exactly that
+   * gate and never inherits the observation chain.
+   */
+  it("claims purchase lookups on the commerce gate alone, and never without the API boundary", () => {
+    for (const apiBoundary of [false, true]) for (const arcObservation of [false, true])
+      for (const agentRegistry of [false, true]) for (const purchaseReview of [false, true]) {
+        const flags = { apiBoundary, arcObservation, agentRegistry, agentJobs: false, purchaseReview };
+        expect(workspaceSectionUsesNetwork("purchases-title", flags)).toBe(apiBoundary && purchaseReview);
+      }
+    // An omitted flag is an absent capability, never an assumed one.
+    expect(workspaceSectionUsesNetwork("purchases-title", {
+      apiBoundary: true, arcObservation: true, agentRegistry: true, agentJobs: true,
+    })).toBe(false);
+  });
 });

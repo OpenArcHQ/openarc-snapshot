@@ -243,6 +243,7 @@ export const WORKSPACE_RECORD_IDENTITIES = Object.freeze([
   "permission_receipt|openarc.permission-receipt.v3",
   "permission_receipt|openarc.permission-receipt.v4",
   "permission_receipt|openarc.permission-receipt.v5",
+  "permission_receipt|openarc.permission-receipt.v6",
   "research_run|openarc.research-run.v1",
   "sentinel|openarc.workspace-record.v1",
   "task_draft|openarc.task-draft-record.v1",

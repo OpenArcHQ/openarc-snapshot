@@ -1,0 +1,52 @@
+/*
+ * P04-06c — the purchase review mounted inside the encrypted workspace.
+ *
+ * The review markup itself is the accepted console markup, so its two scoped
+ * stylesheets (`tenant.css` and `control-action.css`) are link-loaded for the
+ * lifetime of this view only, exactly as the protected console loads them.
+ *
+ * Those sheets take their colours from custom properties declared on
+ * `.tenant-shell`, which is a full-page grid with a 268px rail. The workspace
+ * already provides its own rail and layout, so this file re-declares ONLY the
+ * colour/radius tokens on a local wrapper. It adds no layout, no reset beyond
+ * box sizing, and nothing global.
+ */
+
+.workspace-purchase-review {
+  --tenant-navy: #0b1729;
+  --tenant-cobalt: #0f62fe;
+  --tenant-cobalt-strong: #0b4fd8;
+  --tenant-canvas: #f4f6fa;
+  --tenant-surface: #ffffff;
+  --tenant-line: #d7dde7;
+  --tenant-line-strong: #b9c2d1;
+  --tenant-ink: #16233a;
+  --tenant-muted: #5a6780;
+  --tenant-gold: #b07d1a;
+  --tenant-danger: #a12727;
+  --tenant-danger-soft: #fdecec;
+  --tenant-radius: 10px;
+
+  display: block;
+  padding: 18px;
+  border: 1px solid var(--tenant-line);
+  border-radius: var(--tenant-radius);
+  background: var(--tenant-surface);
+  color: var(--tenant-ink);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.workspace-purchase-review *,
+.workspace-purchase-review *::before,
+.workspace-purchase-review *::after {
+  box-sizing: border-box;
+}
+
+.workspace-purchase-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

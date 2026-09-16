@@ -440,7 +440,7 @@ const SCHEMA16_FUNCTIONS: readonly { name: string; sig: string; definer: boolean
 describe('schema16 manifest, ownership, ACLs and readiness', () => {
   it('records schema16 and keeps every runtime role off the evidence table and the recorder', async () => {
     const applied = await admin.query<{ id: string }>('SELECT id FROM openarc_meta.schema_migrations ORDER BY id');
-    expect(applied.rows.map((row) => row.id).slice(-2)).toEqual(['0015_payment_attempts', '0016_evidence_store']);
+    expect(applied.rows.map((row) => row.id).slice(-3)).toEqual(['0016_evidence_store', '0017_settlement_observation', '0018_operator_reads']);
     const table = await admin.query<{ enabled: boolean; forced: boolean; owner: string; public_acl: number }>(
       `SELECT c.relrowsecurity AS enabled, c.relforcerowsecurity AS forced, r.rolname AS owner,
               (SELECT count(*)::int FROM aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a

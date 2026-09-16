@@ -622,7 +622,7 @@ function observe(org: string, attempt: string, state: string, transfer: string, 
 describe('schema15 manifest, ownership, ACLs and readiness', () => {
   it('records schema15 and keeps the runtime off the attempt table and every private helper', async () => {
     const applied = await admin.query<{ id: string }>('SELECT id FROM openarc_meta.schema_migrations ORDER BY id');
-    expect(applied.rows.map((row) => row.id).slice(-3)).toEqual(['0014_grant_mutation_reads', '0015_payment_attempts', '0016_evidence_store']);
+    expect(applied.rows.map((row) => row.id).slice(-4)).toEqual(['0015_payment_attempts', '0016_evidence_store', '0017_settlement_observation', '0018_operator_reads']);
     const table = await admin.query<{ enabled: boolean; forced: boolean; owner: string }>(
       `SELECT c.relrowsecurity AS enabled, c.relforcerowsecurity AS forced, r.rolname AS owner
          FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_roles r ON r.oid = c.relowner
@@ -671,7 +671,13 @@ describe('schema15 manifest, ownership, ACLs and readiness', () => {
     ]);
     for (const row of acl.rows) {
       expect([row.proname, row.app]).toEqual([row.proname, runtime.has(row.proname)]);
-      expect([row.proname, row.worker, row.auth, row.pub]).toEqual([row.proname, false, false, 0]);
+      // schema17 gives the observation recorder exactly one principal, the
+      // worker role: settlement can arrive after every buyer session expired,
+      // so no request-serving role may record it. Everything else stays
+      // unreachable from every runtime role.
+      const workerExecutable = row.proname === 'record_payment_attempt_observation';
+      expect([row.proname, row.worker, row.auth, row.pub])
+        .toEqual([row.proname, workerExecutable, false, 0]);
       expect([row.proname, row.config]).toEqual([row.proname, ['search_path=pg_catalog']]);
     }
     const worker = createDatabasePool(workerUrl());

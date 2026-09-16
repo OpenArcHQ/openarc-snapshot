@@ -477,7 +477,7 @@ describe('schema11 manifest, ownership and ACLs', () => {
     const applied = await admin.query<{ id: string }>(
       'SELECT id FROM openarc_meta.schema_migrations ORDER BY id',
     );
-    expect(applied.rows.map((row) => row.id).slice(-7)).toEqual([
+    expect(applied.rows.map((row) => row.id).slice(-9)).toEqual([
       '0010_control_actions',
       '0011_control_action_reads',
       '0012_authorization_grants',
@@ -485,6 +485,8 @@ describe('schema11 manifest, ownership and ACLs', () => {
       '0014_grant_mutation_reads',
       '0015_payment_attempts',
       '0016_evidence_store',
+      '0017_settlement_observation',
+      '0018_operator_reads',
     ]);
     const helpers = await admin.query<{
       proname: string;

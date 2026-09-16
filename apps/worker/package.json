@@ -10,11 +10,13 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:tests": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run -c vitest.config.ts",
     "test:postgres": "vitest run -c vitest.postgres.config.ts"
   },
   "dependencies": {
-    "@openarc/db": "workspace:*"
+    "@openarc/db": "workspace:*",
+    "@openarc/x402": "workspace:*"
   },
   "devDependencies": {
     "tsx": "4.23.13",

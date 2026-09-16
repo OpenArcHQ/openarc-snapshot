@@ -963,6 +963,39 @@ test("treats an incompatible database upgrade as fatal and still exports opaque 
   expect(rescue).not.toContain("FUTURE_DB_PRIVATE_CANARY");
 });
 
+/**
+ * P04-06c — the purchase review is hosted in the workspace, and fails closed.
+ *
+ * This build enables the encrypted workspace but not commerce actions, so the
+ * Purchases view must not exist at all: no rail entry, no decision control, and
+ * ZERO commerce or capability requests. A `?view=purchases` address must fall
+ * back to the overview rather than mounting a surface this build disabled.
+ */
+test("offers no purchase view or decision control when commerce actions are disabled", async ({ page }) => {
+  const commerceRequests: string[] = [];
+  page.on("request", (request) => {
+    const { pathname } = new URL(request.url());
+    if (pathname.startsWith("/v2/")) commerceRequests.push(pathname);
+  });
+
+  await page.goto("/workspace?view=purchases");
+  await page.getByLabel("Workspace passphrase", { exact: false }).fill(localPassphrase);
+  await page.getByLabel("Confirm passphrase").fill(localPassphrase);
+  await page.getByRole("button", { name: "Create encrypted workspace" }).click();
+  await page.getByRole("checkbox", { name: /I saved it somewhere private/u }).check();
+  await page.getByRole("button", { name: "Continue to workspace" }).click();
+  await page.getByRole("button", { name: "Skip" }).click();
+  await expect(page.getByText("UNLOCKED LOCALLY")).toBeVisible();
+
+  // The disabled view is not registered, so the address resolves to Overview.
+  await expect(page.getByRole("heading", { name: "Your agent evidence, held here." })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Purchases", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Review purchase/iu })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Approve purchase" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reject purchase" })).toHaveCount(0);
+  expect(commerceRequests).toEqual([]);
+});
+
 test("workspace and recovery dialogs pass serious accessibility checks on mobile", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/workspace");

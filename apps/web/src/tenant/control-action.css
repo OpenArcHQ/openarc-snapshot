@@ -196,6 +196,33 @@
   margin-block-start: 0.75rem;
 }
 
+/*
+ * P04-06 purchase handoff. It reuses the console's existing tokens and adds no
+ * new visual language. An unknown value is styled as plainly absent so it can
+ * never be mistaken for a figure the server actually sent.
+ */
+.purchase-review__fields {
+  margin-block: 1rem;
+}
+
+.purchase-review__unknown {
+  color: var(--tenant-muted, #5a6780);
+  font-style: italic;
+}
+
+.purchase-review__outcome {
+  border: 1px solid var(--tenant-gold, #b07d1a);
+  border-radius: var(--tenant-radius, 10px);
+  padding: 1rem;
+  margin-block: 1rem;
+}
+
+.purchase-review__unresolved {
+  border-block-start: 1px solid var(--tenant-line, #d7dde7);
+  margin-block-start: 0.75rem;
+  padding-block-start: 0.75rem;
+}
+
 /* Keyboard users must always see where they are. */
 .tenant-actions-console a:focus-visible,
 .tenant-actions-console button:focus-visible,

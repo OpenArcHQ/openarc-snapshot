@@ -110,6 +110,9 @@ importers:
       '@openarc/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@openarc/x402':
+        specifier: workspace:*
+        version: link:../../packages/x402
     devDependencies:
       tsx:
         specifier: 4.23.13
@@ -148,6 +151,44 @@ importers:
       viem:
         specifier: 2.56.5
         version: 2.56.5(typescript@6.0.3)(zod@4.5.4)
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.13))
+
+  tools/agent-harness:
+    dependencies:
+      '@openarc/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@openarc/x402':
+        specifier: workspace:*
+        version: link:../../packages/x402
+      viem:
+        specifier: 2.56.5
+        version: 2.56.5(typescript@6.0.3)(zod@4.5.4)
+      zod:
+        specifier: 4.5.4
+        version: 4.5.4
+    devDependencies:
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.13))
+
+  tools/x402-reference-provider:
+    dependencies:
+      '@openarc/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@openarc/x402':
+        specifier: workspace:*
+        version: link:../../packages/x402
+      viem:
+        specifier: 2.56.5
+        version: 2.56.5(typescript@6.0.3)(zod@4.5.4)
+      zod:
+        specifier: 4.5.4
+        version: 4.5.4
+    devDependencies:
       vitest:
         specifier: 4.1.11
         version: 4.1.11(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.13))

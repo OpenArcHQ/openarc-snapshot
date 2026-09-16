@@ -44,6 +44,8 @@ import { GatewayFinalizationError, runGatewayPermissionFlow } from "../api/gatew
 import { PaymentsPanel } from "./PaymentsPanel.js";
 import { AgentReportsPanel } from "./AgentReportsPanel.js";
 import { InvestigationsPanel } from "./InvestigationsPanel.js";
+import { PurchasesPanel, purchaseReviewEnabled } from "./PurchasesPanel.js";
+import type { PurchaseVaultSession } from "./purchase-binding.js";
 import { requestJobEvidence } from "../api/job-evidence.js";
 import { JobFinalizationError, runJobPermissionFlow } from "../api/job-permission-flow.js";
 import { requestAgentRegistryEvidence } from "../api/agent-registry.js";
@@ -108,7 +110,7 @@ import type {
   VaultStorageStatus,
 } from "./types.js";
 
-type WorkspaceView = "overview" | "agents" | "activity" | "policies" | "evidence" | "settings" | "sources" | "jobs" | "payments" | "agent-reports" | "investigations";
+type WorkspaceView = "overview" | "agents" | "activity" | "policies" | "evidence" | "settings" | "sources" | "jobs" | "payments" | "agent-reports" | "investigations" | "purchases";
 type Screen = VaultScreen;
 
 type SessionGuard = {
@@ -123,6 +125,10 @@ const ARC_OBSERVATION_ENABLED = API_BOUNDARY_ENABLED && arcObservationEnabled();
 const AGENT_REGISTRY_ENABLED = ARC_OBSERVATION_ENABLED && agentRegistryEnabled();
 const AGENT_JOBS_ENABLED = AGENT_REGISTRY_ENABLED && agentJobsEnabled();
 const GATEWAY_EVIDENCE_ENABLED = AGENT_JOBS_ENABLED && gatewayEvidenceEnabled();
+// P04-06c. The purchase review has its own server authority and its own public
+// capability probe: it depends on the commerce-action gate, never on the Arc
+// observation chain. With it off, the view is not registered at all.
+const PURCHASE_REVIEW_ENABLED = API_BOUNDARY_ENABLED && purchaseReviewEnabled();
 const VIEWS: readonly { id: WorkspaceView; label: string; note: string }[] = [
   { id: "overview", label: "Overview", note: "Local workspace status" },
   { id: "agents", label: "Agents", note: AGENT_REGISTRY_ENABLED ? "Local profiles + registry evidence" : "Owner-supplied profiles" },
@@ -133,6 +139,7 @@ const VIEWS: readonly { id: WorkspaceView; label: string; note: string }[] = [
   ...(API_BOUNDARY_ENABLED ? [{ id: "sources" as const, label: "Sources", note: "Explicit connection checks" }] : []),
   ...(AGENT_JOBS_ENABLED ? [{ id: "jobs" as const, label: "Jobs", note: "Reference contract evidence" }] : []),
   ...(GATEWAY_EVIDENCE_ENABLED ? [{ id: "payments" as const, label: "Payments", note: "x402 metadata + Gateway reports" }] : []),
+  ...(PURCHASE_REVIEW_ENABLED ? [{ id: "purchases" as const, label: "Purchases", note: "Review and decide agent purchases" }] : []),
   ...(genericAgentImportEnabled() ? [{ id: "agent-reports" as const, label: "Agent reports", note: "Local imports + policy comparisons" }] : []),
   ...(investigationsEnabled() ? [{ id: "investigations" as const, label: "Investigations", note: "Search saved evidence locally" }] : []),
 ];
@@ -1062,6 +1069,37 @@ export function VaultWorkspace({ build }: { build: BuildInfo }) {
     }
   };
 
+  /**
+   * P04-06c — the Vault session a purchase decision is receipted against.
+   *
+   * It is the SAME wiring the five evidence flows above use: this tab's
+   * session guard, the live unlocked workspace, the encrypted save that adopts
+   * the new revision and broadcasts it, and `handleObservedVaultBoundary` as
+   * the refusal handler that re-reads the stored Vault and locks this tab. The
+   * durable `assertStoredWorkspaceRevision` recheck is applied by the binding.
+   *
+   * With nothing unlocked it yields no binding at all, so the controls are
+   * unavailable and no decision request can be built.
+   */
+  const purchaseVaultSession = useCallback((): PurchaseVaultSession => {
+    const guard = createSessionGuard();
+    return {
+      currentWorkspace: () => unlockedRef.current,
+      assertActive: guard.assertActive,
+      isActive: guard.isActive,
+      origin: typeof window === "undefined" ? null : window.location.origin,
+      onCommitted: (workspace) => {
+        unlockedRef.current = workspace;
+        deadlineRef.current = Date.now() + INACTIVITY_MS;
+        setScreen({ phase: "unlocked", workspace });
+        broadcast("changed", workspace.meta.vaultId);
+      },
+      onRefused: (cause, isActive) => {
+        void handleObservedVaultBoundary(cause, isActive);
+      },
+    };
+  }, [broadcast, createSessionGuard, handleObservedVaultBoundary]);
+
   const deleteRecords = async (ids: readonly string[], message: string) => {
     const current = unlockedRef.current;
     if (!current) return false;
@@ -1293,6 +1331,7 @@ export function VaultWorkspace({ build }: { build: BuildInfo }) {
           setNotice={setNotice}
           onOperationError={handleObservedVaultBoundary}
           createSessionGuard={createSessionGuard}
+          purchaseVaultSession={purchaseVaultSession}
           broadcast={broadcast}
         />
         <footer className="workspace-footer">
@@ -1428,6 +1467,7 @@ function WorkspaceViewPanel(props: {
   setNotice: (value: string | null) => void;
   onOperationError: (cause: unknown, isActive: () => boolean) => Promise<boolean>;
   createSessionGuard: () => SessionGuard;
+  purchaseVaultSession: () => PurchaseVaultSession;
   broadcast: (type: CoordinationMessage["type"], vaultId: string) => void;
 }) {
   if (props.view === "overview") return <Overview records={props.workspace.records} onNavigate={navigateFromPanel} onOpenTour={props.onOpenTour} />;
@@ -1438,6 +1478,7 @@ function WorkspaceViewPanel(props: {
   if (props.view === "sources") return <SourcesPanel {...props} />;
   if (props.view === "jobs") return <JobsPanel {...props} />;
   if (props.view === "payments") return <PaymentsPanel {...props} />;
+  if (props.view === "purchases" && PURCHASE_REVIEW_ENABLED) return <PurchasesPanel {...props} />;
   if (props.view === "agent-reports") return <AgentReportsPanel {...props} />;
   if (props.view === "investigations" && investigationsEnabled()) return <InvestigationsPanel key={props.workspace.meta.revision} {...props} />;
   return <SettingsPanel {...props} />;
@@ -2274,7 +2315,7 @@ function WorkspaceWait({ label }: { label: string }) {
 export function SectionHeading({ eyebrow, title, id, children, onLearn }: { eyebrow: string; title: string; id: string; children: ReactNode; onLearn: (target: HTMLElement) => void }) {
   const usesNetwork = workspaceSectionUsesNetwork(id, { apiBoundary: API_BOUNDARY_ENABLED,
     arcObservation: ARC_OBSERVATION_ENABLED, agentRegistry: AGENT_REGISTRY_ENABLED, agentJobs: AGENT_JOBS_ENABLED,
-    gatewayEvidence: GATEWAY_EVIDENCE_ENABLED });
+    gatewayEvidence: GATEWAY_EVIDENCE_ENABLED, purchaseReview: PURCHASE_REVIEW_ENABLED });
   return <header className="workspace-section-heading"><div><p className="eyebrow">{eyebrow}</p><div className="workspace-title-row"><h1 id={id}>{title}</h1><details className="workspace-info"><summary role="button" aria-label={`About ${title}`} title={`About ${title}`}>i</summary><p>{children}</p></details></div></div><div className="workspace-heading-context"><p>{children}</p><div><span className="workspace-view-status">{usesNetwork ? "EXPLICIT READ-ONLY LOOKUPS" : "ENABLED · LOCAL ONLY"}</span><a href="#workspace-tour" onClick={(event) => { event.preventDefault(); onLearn(event.currentTarget); }}>Learn how this works</a></div></div></header>;
 }
 

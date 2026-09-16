@@ -142,6 +142,9 @@ const GENERATION = /^[1-9][0-9]{0,9}$(?![\s\S])/;
 const UINT256 = /^(0|[1-9][0-9]{0,77})$(?![\s\S])/;
 const DEBIT = /^[1-9][0-9]{0,127}$(?![\s\S])/;
 const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$(?![\s\S])/;
+// Canonical wire limit 1..50 with an absolute end, matching the schema11 pages.
+const LIST_LIMIT = /^(?:[1-9]|[1-4][0-9]|50)$(?![\s\S])/;
+const GRANT_LIST_KEYS = ['afterGrantId', 'limit'] as const;
 
 const GRANT_IDENTITY = {
   networkId: 'eip155:5042002',
@@ -388,6 +391,28 @@ interface GrantReceiptRow extends Record<string, unknown> {
 }
 
 /** Provider claim result. It carries no buyer organization, policy or account. */
+/** Accepted default grant page size, applied here when `limit` is omitted. */
+export const CONTROL_GRANT_LIST_DEFAULT_LIMIT = 25;
+/** Accepted maximum grant page size. */
+export const CONTROL_GRANT_LIST_MAX_LIMIT = 50;
+
+/** Accepted grant list request: exclusive lexical cursor plus bounded limit. */
+export interface CommerceGrantListQuery {
+  readonly afterGrantId?: string;
+  readonly limit?: string;
+}
+
+/**
+ * One organization-wide grant page. `organizationId` is the DB-derived
+ * authenticated organization, never the caller-supplied lookup argument, and
+ * `nextCursor` is non-null only when a further page actually exists.
+ */
+export interface CommerceGrantListPage {
+  readonly organizationId: string;
+  readonly items: readonly CommerceGrantMetadata[];
+  readonly nextCursor: string | null;
+}
+
 export interface CommerceGrantClaimDbResult {
   readonly replayed: boolean;
   readonly view: CommerceGrantProviderView;
@@ -453,6 +478,47 @@ function requireMetadata(value: unknown): CommerceGrantMutationMetadata {
     fail('CONTROL_GRANT_STORE_INPUT_INVALID');
   }
   return { idempotencyKey: value['idempotencyKey'] as string, mutationId };
+}
+
+/**
+ * Strict bounded query envelope for the grant page. An absent query is the
+ * accepted defaults; an unknown key, a prototype-bearing object or a present
+ * key whose value is `undefined` is a fixed input fault, never a silent
+ * default.
+ */
+function requireQueryShape(value: unknown, allowed: readonly string[]): Record<string, unknown> {
+  if (value === undefined || value === null) return {};
+  if (!isRecord(value)) fail('CONTROL_GRANT_STORE_INPUT_INVALID');
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    fail('CONTROL_GRANT_STORE_INPUT_INVALID');
+  }
+  for (const key of Object.keys(value)) {
+    if (!allowed.includes(key)) fail('CONTROL_GRANT_STORE_INPUT_INVALID');
+    if (value[key] === undefined) fail('CONTROL_GRANT_STORE_INPUT_INVALID');
+  }
+  return value;
+}
+
+/**
+ * The canonical string limit 1..50. Absent means the accepted default 25; the
+ * default is applied HERE, never by the database and never by coercion.
+ */
+function requireListLimit(value: unknown): number {
+  if (value === undefined) return CONTROL_GRANT_LIST_DEFAULT_LIMIT;
+  if (typeof value !== 'string' || !LIST_LIMIT.test(value)) {
+    fail('CONTROL_GRANT_STORE_INPUT_INVALID');
+  }
+  const limit = Number.parseInt(value, 10);
+  if (!Number.isInteger(limit) || limit < 1 || limit > CONTROL_GRANT_LIST_MAX_LIMIT) {
+    fail('CONTROL_GRANT_STORE_INPUT_INVALID');
+  }
+  return limit;
+}
+
+function requireGrantCursor(value: unknown): string | null {
+  if (value === undefined) return null;
+  return requireGrant(value);
 }
 
 function requireInputShape(value: unknown, allowed: readonly string[]): Record<string, unknown> {
@@ -860,6 +926,63 @@ export class ControlGrantStore {
   }
 
   /**
+   * Organization-wide grant page for the current human caller.
+   *
+   * The schema12 reader answers by grant id only, so a control room could not
+   * enumerate the grants of the organization it already administers. This is
+   * the missing page: the SAME projection and the SAME derived status priority
+   * as `readGrant`, keyset-paged over the lexical grant id under a hard page
+   * cap. No status is filtered. Another organization's grants never appear,
+   * and an authorized empty page is an empty item list with a null cursor.
+   */
+  async listGrants(
+    humanSessionHash: unknown,
+    organizationId: unknown,
+    query?: unknown,
+  ): Promise<CommerceGrantListPage> {
+    const hash = requireHash(humanSessionHash);
+    const organization = requireOrganization(organizationId);
+    const shape = requireQueryShape(query, GRANT_LIST_KEYS);
+    const cursor = requireGrantCursor(shape['afterGrantId']);
+    const limit = requireListLimit(shape['limit']);
+    return this.#withTransaction(async (client) => {
+      // limit + 1 detects a further page without a count or an offset.
+      const result = await client.query<Record<string, unknown>>(
+        `SELECT out_found, ${GRANT_COLUMNS}
+           FROM openarc_durable.list_authorization_grants($1, $2, $3, $4::int)`,
+        [hash, organization, cursor, limit],
+      );
+      const rows = result.rows;
+      if (rows.length === 0 || rows.length > limit + 1) failOutput();
+      const authenticated = this.#requireUniformOrganization(rows, organization);
+      const fetched: CommerceGrantMetadata[] = [];
+      if (rows.length !== 1 || rows[0]?.['out_found'] !== false) {
+        for (const row of rows) {
+          if (row['out_found'] !== true) failOutput();
+          const metadata = this.#projectMetadata(row);
+          if (metadata.organizationId !== authenticated) failOutput();
+          fetched.push(metadata);
+        }
+      }
+      for (let index = 1; index < fetched.length; index += 1) {
+        const previous = fetched[index - 1];
+        const current = fetched[index];
+        if (previous === undefined || current === undefined) failOutput();
+        if (!(previous.grantId < current.grantId)) failOutput();
+      }
+      if (cursor !== null) {
+        const first = fetched[0];
+        if (first !== undefined && !(cursor < first.grantId)) failOutput();
+      }
+      const hasMore = fetched.length > limit;
+      const items = fetched.slice(0, limit);
+      const last = items[items.length - 1];
+      const nextCursor = hasMore && last !== undefined ? last.grantId : null;
+      return { organizationId: authenticated, items, nextCursor };
+    });
+  }
+
+  /**
    * Buyer lost-response recovery for a grant mutation the BROWSER performed.
    *
    * It answers only for `control.grant.revoke` and only when the receipt was
@@ -1082,6 +1205,26 @@ export class ControlGrantStore {
     return value;
   }
 
+  /**
+   * Every row of one page must carry the SAME DB-derived organization, and it
+   * must be exactly the organization the projection authorized. A page whose
+   * rows disagree is a fixed UNAVAILABLE, never a silently relabeled mix.
+   */
+  #requireUniformOrganization(
+    rows: readonly Record<string, unknown>[],
+    requested: string,
+  ): string {
+    const first = rows[0];
+    if (first === undefined) failOutput();
+    const organization = first['out_organization_id'];
+    if (typeof organization !== 'string' || !ORG_ID.test(organization)) failOutput();
+    for (const row of rows) {
+      if (row['out_organization_id'] !== organization) failOutput();
+    }
+    if (organization !== requested) failOutput();
+    return organization;
+  }
+
   #projectMetadata(row: Record<string, unknown>): CommerceGrantMetadata {
     const generation = row['out_generation'];
     if (
@@ -1262,8 +1405,15 @@ export class ControlGrantStore {
       { name: 'revoke_authorization_grant', args: 'human_session_hash text, organization_id text, grant_id_input text, mutation_id uuid, key_hash text, request_digest text, session_context_digest text' },
       { name: 'read_authorization_grant', args: 'human_session_hash text, organization_id text, grant_id_input text' },
       { name: 'read_provider_grant_attempt_status', args: 'provider_session_hash text, attempt_id_input uuid' },
+    ];
+    // The STABLE production readers: the two schema14 mutation-status readers
+    // and the schema18 organization-wide grant page. PostgreSQL itself forbids
+    // a STABLE function from writing, so the volatility is part of the
+    // contract and a relabel to VOLATILE is a readiness failure.
+    const stableProduction: readonly { name: string; args: string }[] = [
       { name: 'read_human_grant_mutation_status', args: 'human_session_hash text, organization_id text, mutation_id uuid' },
       { name: 'read_agent_grant_mutation_status', args: 'commerce_token_hash text, mutation_id uuid' },
+      { name: 'list_authorization_grants', args: 'human_session_hash text, organization_id text, after_grant_id text, limit_count integer' },
     ];
     // The closed cores, the two lock chains, the provider identity resolver
     // and the claim digest helper must stay unreachable from the runtime.
@@ -1281,12 +1431,14 @@ export class ControlGrantStore {
       args: string;
       owner: string;
       secdef: boolean;
+      volatility: string;
       config: string[];
       app_exec: boolean;
       public_grants: number;
     }>(
       `SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args,
               r.rolname AS owner, p.prosecdef AS secdef,
+              p.provolatile::text AS volatility,
               coalesce(p.proconfig, ARRAY[]::text[]) AS config,
               has_function_privilege('openarc_tenant_app', p.oid, 'EXECUTE') AS app_exec,
               (SELECT count(*)::int FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
@@ -1297,35 +1449,40 @@ export class ControlGrantStore {
         WHERE n.nspname = 'openarc_durable'
           AND p.prokind = 'f'
           AND p.proname = ANY ($1::text[])`,
-      [[...production, ...privateHelpers].map((entry) => entry.name)],
+      [[...production, ...stableProduction, ...privateHelpers].map((entry) => entry.name)],
     );
+    // Exactly one overload per inventoried name: a second signature (for
+    // example one accepting an unbounded page size) is a readiness failure,
+    // never a silent fallback.
+    const counts = new Map<string, number>();
+    for (const row of rows.rows) counts.set(row.proname, (counts.get(row.proname) ?? 0) + 1);
+    for (const count of counts.values()) {
+      if (count !== 1) fail('CONTROL_GRANT_STORE_UNAVAILABLE');
+    }
     const byName = new Map(rows.rows.map((row) => [`${row.proname}(${row.args})`, row]));
-    for (const expected of production) {
-      const row = byName.get(`${expected.name}(${expected.args})`);
-      if (row === undefined) fail('CONTROL_GRANT_STORE_UNAVAILABLE');
-      if (
-        row.owner !== 'openarc_migrator' ||
-        row.secdef !== true ||
-        !row.config.includes('search_path=pg_catalog') ||
-        row.public_grants !== 0 ||
-        row.app_exec !== true
-      ) {
-        fail('CONTROL_GRANT_STORE_UNAVAILABLE');
+    const check = (
+      entries: readonly { name: string; args: string }[],
+      appExec: boolean,
+      volatility: string,
+    ): void => {
+      for (const expected of entries) {
+        const row = byName.get(`${expected.name}(${expected.args})`);
+        if (row === undefined) fail('CONTROL_GRANT_STORE_UNAVAILABLE');
+        if (
+          row.owner !== 'openarc_migrator' ||
+          row.secdef !== true ||
+          row.volatility !== volatility ||
+          !row.config.includes('search_path=pg_catalog') ||
+          row.public_grants !== 0 ||
+          row.app_exec !== appExec
+        ) {
+          fail('CONTROL_GRANT_STORE_UNAVAILABLE');
+        }
       }
-    }
-    for (const expected of privateHelpers) {
-      const row = byName.get(`${expected.name}(${expected.args})`);
-      if (row === undefined) fail('CONTROL_GRANT_STORE_UNAVAILABLE');
-      if (
-        row.owner !== 'openarc_migrator' ||
-        row.secdef !== true ||
-        !row.config.includes('search_path=pg_catalog') ||
-        row.public_grants !== 0 ||
-        row.app_exec !== false
-      ) {
-        fail('CONTROL_GRANT_STORE_UNAVAILABLE');
-      }
-    }
+    };
+    check(production, true, 'v');
+    check(stableProduction, true, 's');
+    check(privateHelpers, false, 'v');
     const applied = await client.query<{ id: string; checksum: string }>(
       `SELECT id, checksum FROM openarc_meta.schema_migrations ORDER BY id`,
     );
