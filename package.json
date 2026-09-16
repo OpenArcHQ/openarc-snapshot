@@ -49,7 +49,7 @@
     "ops:reader": "node scripts/test-compatible-reader-drill.mjs",
     "release:check": "node scripts/release-check.mjs",
     "release:gate": "pnpm release:check && pnpm audit:prod && pnpm licenses:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:reference-contract && pnpm e2e",
-    "test": "pnpm --filter @openarc/shared build && pnpm --filter @openarc/db build && pnpm -r --if-present test --maxWorkers=2",
+    "test": "pnpm --filter @openarc/shared build && pnpm --filter @openarc/db build && pnpm --filter @openarc/x402 build && pnpm -r --if-present test --maxWorkers=2",
     "test:reference-contract": "pnpm --filter @openarc/shared build && node --test tools/reference-provider/contract.test.mjs",
     "typecheck": "pnpm -r --if-present typecheck"
   },
