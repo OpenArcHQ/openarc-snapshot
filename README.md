@@ -18,12 +18,14 @@ onchain observations into an inspectable evidence trail. Distinguish what was
 reported, what was observed and what remains unresolved—without treating a
 successful transfer as proof of authorization or service delivery.
 
-**Current status:** the legacy investigation app remains on controlled Testnet
-staging. PORT00 and PORT01 are accepted; PORT02 is implemented in the integrated
-source and undergoing final production-browser and release validation; PORT03–PORT09
-are not implemented. Hosted account enrollment and new marketplace features
-remain disabled, and purchases are unavailable. OpenArc does not support mainnet.
-See the [commerce transition and build order](docs/engineering/commerce-transition.md).
+**Current status:** OpenArc runs on Arc Testnet as a local-first evidence
+workspace. Available today: Arc account and transaction observation, ERC-8004
+identity and reputation evidence, ERC-8183 job evidence, Circle Gateway transfer
+evidence, the encrypted browser workspace, investigations and bounded exports.
+Hosted accounts, the marketplace and agent purchases are built behind their own
+switches and are not enabled in this deployment, so purchases are unavailable.
+OpenArc does not support mainnet. See the [roadmap](docs/roadmap.md) for what
+ships next and the rules the purchase path will follow.
 
 ## Capabilities
 
